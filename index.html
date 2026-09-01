@@ -2,19 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Cortical phosphene vision simulator</title>
   <style>
     :root { color-scheme:dark; --bg:#090d12; --panel:#121922; --line:#293441; --text:#edf4fa; --muted:#9baebe; --green:#55e596; --red:#ff6f72; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
-    main { max-width:1250px; margin:auto; padding:17px; }
+    main { width:100%; max-width:1250px; margin:auto; padding:17px max(17px,env(safe-area-inset-right)) 17px max(17px,env(safe-area-inset-left)); }
     h1 { margin:0 0 3px; font-size:23px; }
     .sub { color:var(--muted); margin-bottom:8px; }
     .modelGuide { max-width:900px; color:#c8d4de; background:#0d141c; border-left:3px solid var(--green); border-radius:0 8px 8px 0; padding:9px 11px; margin-bottom:13px; }
-    .layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr); gap:14px; }
+    .layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr); grid-template-areas:"visual controls" "debug controls"; gap:14px; align-items:start; }
     .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
-    #percept { display:block; width:100%; aspect-ratio:4/3; background:#000; border-radius:8px; }
+    .visualPanel { grid-area:visual; min-width:0; }
+    .controlsPanel { grid-area:controls; min-width:0; }
+    .debugPanel { grid-area:debug; min-width:0; }
+    #percept { display:block; width:100%; height:auto; background:#000; border-radius:8px; }
     video,#processing { display:none; }
     .buttons { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
     button { border:0; border-radius:8px; padding:9px 13px; font-weight:700; cursor:pointer; background:var(--green); color:#06150d; }
@@ -35,17 +38,36 @@
     .metric { background:#0b1118; border-radius:8px; padding:9px; }
     .metric span { display:block; color:var(--muted); font-size:11px; }
     .metric strong { font-size:20px; font-variant-numeric:tabular-nums; }
-    .debugGrid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:12px; }
+    .debugGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
     figure { margin:0; min-width:0; }
     figcaption { color:var(--muted); font-size:11px; margin:0 0 4px 2px; }
-    .debugCanvas { display:block; width:100%; aspect-ratio:4/3; background:#000; border-radius:6px; }
+    .debugCanvas { display:block; width:100%; height:auto; background:#000; border-radius:6px; }
     details { margin-top:13px; color:var(--muted); }
     .note { color:var(--muted); font-size:12px; margin-top:8px; }
     footer { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
     footer a { color:#8fdab1; }
     .references { margin:6px 0 0; padding-left:20px; }
     .references li { margin:3px 0; }
-    @media(max-width:900px) { .layout{grid-template-columns:1fr}.debugGrid{grid-template-columns:repeat(2,1fr)} }
+    @media(max-width:900px) {
+      .layout { grid-template-columns:minmax(0,1fr); grid-template-areas:"visual" "controls" "debug"; }
+      .debugGrid { grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); }
+    }
+    @media(max-width:600px) {
+      main { padding:10px max(10px,env(safe-area-inset-right)) 14px max(10px,env(safe-area-inset-left)); }
+      h1 { font-size:20px; line-height:1.2; }
+      .panel { padding:9px; border-radius:10px; }
+      .layout { gap:10px; }
+      .modelGuide { padding:8px 9px; }
+      .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 9px; margin:12px 0; }
+      .row label { width:auto; grid-column:1; grid-row:1; }
+      .row .tip { grid-column:2; grid-row:1; }
+      .row > input[type=range],.row > .fovButtons { grid-column:1; grid-row:2; width:100%; min-width:0; }
+      .row > output { grid-column:2; grid-row:2; align-self:center; }
+      .row > select,.row > .pairedInput { grid-column:1/-1; grid-row:2; width:100%; min-width:0; }
+      .row > input[type=checkbox] { grid-column:1/-1; grid-row:2; justify-self:start; width:20px; height:20px; }
+      .tip::after { position:fixed; left:12px; right:12px; bottom:auto; top:12px; width:auto; transform:translateY(-4px); }
+      .tip:hover::after,.tip:focus::after { transform:translateY(0); }
+    }
   </style>
 </head>
 <body>
@@ -55,22 +77,13 @@
   <div class="modelGuide"><strong>What is being simulated:</strong> each electrode samples a camera-derived activation map and produces a localized white phosphene. Electrode density follows cortical magnification, while phosphene size reflects estimated electrical current spread in V1. <strong>Encoding modes:</strong> Sobel emphasizes local luminance boundaries; Luminance encodes image intensity directly; Luminance + Sobel combines surface brightness with boundary information. This is a research visualization, not a patient-specific prediction.</div>
 
   <div class="layout">
-    <section class="panel">
+    <section class="panel visualPanel">
       <canvas id="percept" width="320" height="240"></canvas>
       <video id="video" playsinline muted></video>
       <canvas id="processing" width="320" height="240"></canvas>
-
-      <div class="debugGrid" id="debugGrid">
-        <figure><figcaption>1. Camera</figcaption><canvas class="debugCanvas" id="cameraDebug" width="320" height="240"></canvas></figure>
-        <figure><figcaption>2. Grayscale</figcaption><canvas class="debugCanvas" id="grayDebug" width="320" height="240"></canvas></figure>
-        <figure><figcaption id="stage3Caption">3. Sobel edges</figcaption><canvas class="debugCanvas" id="edgeDebug" width="320" height="240"></canvas></figure>
-        <figure><figcaption>4. Encoded image</figcaption><canvas class="debugCanvas" id="encodedDebug" width="320" height="240"></canvas></figure>
-        <figure><figcaption id="sampleCaption">5. Electrode samples</figcaption><canvas class="debugCanvas" id="sampleDebug" width="320" height="240"></canvas></figure>
-      </div>
-      <div class="note">Electrode view: white = active, gray outline = available but currently inactive, red = dropped electrode.</div>
     </section>
 
-    <aside class="panel">
+    <aside class="panel controlsPanel">
       <div class="buttons">
         <button id="cameraToggle">Start camera</button>
       </div>
@@ -99,7 +112,7 @@
       <div class="row"><label for="recoveryTau">Recovery time</label><span class="tip" tabindex="0" data-tip="Exponential recovery time constant while stimulation is absent. After one time constant, residual adaptation has fallen to 37%.">i</span><input id="recoveryTau" type="range" min="0.5" max="30" step="0.5" value="8"><output id="recoveryTauOut"></output></div>
       <div class="row"><label for="maxAttenuation">Max attenuation</label><span class="tip" tabindex="0" data-tip="Largest asymptotic brightness reduction during uninterrupted activation. At 70% attenuation, a sustained phosphene retains 30% of its unadapted brightness.">i</span><input id="maxAttenuation" type="range" min="0" max="0.9" step="0.05" value="0.70"><output id="maxAttenuationOut"></output></div>
       <div class="row"><label for="mirror">Mirror camera</label><span class="tip" tabindex="0" data-tip="Horizontally mirrors the camera image to behave like a conventional selfie preview.">i</span><input id="mirror" type="checkbox" checked></div>
-      <div class="row"><label for="showDebug">Update debug views</label><span class="tip" tabindex="0" data-tip="Displays the camera, grayscale image, Sobel map, selected encoder output, and electrode samples. Disabling these panels can improve frame rate.">i</span><input id="showDebug" type="checkbox" checked></div>
+      <div class="row"><label for="showDebug">Update debug views</label><span class="tip" tabindex="0" data-tip="Displays the camera, Sobel map, selected encoder output, and electrode samples. Disabling these panels can improve frame rate.">i</span><input id="showDebug" type="checkbox" checked></div>
 
       <div class="readout">
         <div class="metric"><span>Processing</span><strong id="fpsValue">0</strong> FPS</div>
@@ -107,6 +120,16 @@
       </div>
 
     </aside>
+
+    <section class="panel debugPanel" id="debugPanel">
+      <div class="debugGrid" id="debugGrid">
+        <figure><figcaption>1. Camera</figcaption><canvas class="debugCanvas" id="cameraDebug" width="320" height="240"></canvas></figure>
+        <figure><figcaption>2. Sobel edges</figcaption><canvas class="debugCanvas" id="edgeDebug" width="320" height="240"></canvas></figure>
+        <figure><figcaption>3. Encoded image</figcaption><canvas class="debugCanvas" id="encodedDebug" width="320" height="240"></canvas></figure>
+        <figure><figcaption>4. Electrode samples</figcaption><canvas class="debugCanvas" id="sampleDebug" width="320" height="240"></canvas></figure>
+      </div>
+      <div class="note">Electrode view: white = active, gray outline = available but currently inactive, red = dropped electrode.</div>
+    </section>
   </div>
 
   <details>
@@ -160,7 +183,6 @@ const percept=document.getElementById('percept');
 const outctx=percept.getContext('2d');
 const cameraDebug=document.getElementById('cameraDebug');
 const cameraDebugCtx=cameraDebug.getContext('2d');
-const grayDebugCtx=document.getElementById('grayDebug').getContext('2d');
 const edgeDebugCtx=document.getElementById('edgeDebug').getContext('2d');
 const encodedDebugCtx=document.getElementById('encodedDebug').getContext('2d');
 const sampleDebugCtx=document.getElementById('sampleDebug').getContext('2d');
@@ -202,7 +224,7 @@ function applyDefaults(){
   controls.threshold.value=DEFAULTS.activationThreshold;
   controls.mirror.checked=DEFAULTS.mirrorCamera;
   controls.showDebug.checked=DEFAULTS.showDebugViews;
-  document.getElementById('debugGrid').style.display=DEFAULTS.showDebugViews?'grid':'none';
+  document.getElementById('debugPanel').style.display=DEFAULTS.showDebugViews?'block':'none';
 }
 
 applyDefaults();
@@ -210,7 +232,6 @@ applyDefaults();
 const gray=new Uint8ClampedArray(W*H);
 const edges=new Uint8ClampedArray(W*H);
 const encoded=new Uint8ClampedArray(W*H);
-const grayImage=grayDebugCtx.createImageData(W,H);
 const edgeImage=edgeDebugCtx.createImageData(W,H);
 const encodedImage=encodedDebugCtx.createImageData(W,H);
 let electrodes=[];
@@ -334,12 +355,11 @@ function arrayToCanvas(array,image,ctx){
 }
 
 function updateProcessingUI(){
-  document.getElementById('mixRow').style.display=controls.processingMode.value==='hybrid'?'flex':'none';
+  document.getElementById('mixRow').style.display=controls.processingMode.value==='hybrid'?'':'none';
 }
 
 function drawDebugViews(){
   cameraDebugCtx.drawImage(processing,0,0,W,H);
-  arrayToCanvas(gray,grayImage,grayDebugCtx);
   arrayToCanvas(edges,edgeImage,edgeDebugCtx);
   arrayToCanvas(encoded,encodedImage,encodedDebugCtx);
 
@@ -372,6 +392,22 @@ function drawDebugViews(){
   }
 }
 
+function drawVideoCover(ctx,source,destinationWidth,destinationHeight){
+  const sourceWidth=source.videoWidth||destinationWidth;
+  const sourceHeight=source.videoHeight||destinationHeight;
+  const sourceAspect=sourceWidth/sourceHeight;
+  const destinationAspect=destinationWidth/destinationHeight;
+  let sourceX=0,sourceY=0,cropWidth=sourceWidth,cropHeight=sourceHeight;
+  if(sourceAspect>destinationAspect){
+    cropWidth=sourceHeight*destinationAspect;
+    sourceX=(sourceWidth-cropWidth)/2;
+  }else if(sourceAspect<destinationAspect){
+    cropHeight=sourceWidth/destinationAspect;
+    sourceY=(sourceHeight-cropHeight)/2;
+  }
+  ctx.drawImage(source,sourceX,sourceY,cropWidth,cropHeight,0,0,destinationWidth,destinationHeight);
+}
+
 function processFrame(now){
   const elapsed=now-lastProcessed;
   if(elapsed<1000/TARGET_FPS) return;
@@ -381,7 +417,7 @@ function processFrame(now){
 
   pctx.save();
   if(controls.mirror.checked){ pctx.translate(W,0); pctx.scale(-1,1); }
-  pctx.drawImage(video,0,0,W,H);
+  drawVideoCover(pctx,video,W,H);
   pctx.restore();
   const pixels=pctx.getImageData(0,0,W,H).data;
 
@@ -463,7 +499,7 @@ async function startCamera(){
   cameraButton.textContent='Starting camera…';
   statusEl.textContent='Requesting camera access…';
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:30}},audio:false});
+    stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},aspectRatio:{ideal:4/3},frameRate:{ideal:30}},audio:false});
     video.srcObject=stream;
     await video.play();
     running=true; lastProcessed=performance.now(); frameCounter=0; fps=0;
@@ -511,7 +547,7 @@ controls.processingMode.addEventListener('change',updateProcessingUI);
 controls.adaptationEnabled.addEventListener('change',()=>{
   if(!controls.adaptationEnabled.checked) electrodes.forEach(electrode=>electrode.adaptation=0);
 });
-controls.showDebug.addEventListener('change',()=>{ document.getElementById('debugGrid').style.display=controls.showDebug.checked?'grid':'none'; });
+controls.showDebug.addEventListener('change',()=>{ document.getElementById('debugPanel').style.display=controls.showDebug.checked?'block':'none'; });
 document.getElementById('smaller').addEventListener('click',()=>{ controls.fov.value=Math.max(6,Number(controls.fov.value)-5); buildElectrodes(); });
 document.getElementById('bigger').addEventListener('click',()=>{ controls.fov.value=Math.min(50,Number(controls.fov.value)+5); buildElectrodes(); });
 document.getElementById('cameraToggle').addEventListener('click',toggleCamera);
