@@ -10,7 +10,8 @@
     body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
     main { max-width:1250px; margin:auto; padding:17px; }
     h1 { margin:0 0 3px; font-size:23px; }
-    .sub { color:var(--muted); margin-bottom:13px; }
+    .sub { color:var(--muted); margin-bottom:8px; }
+    .modelGuide { max-width:900px; color:#c8d4de; background:#0d141c; border-left:3px solid var(--green); border-radius:0 8px 8px 0; padding:9px 11px; margin-bottom:13px; }
     .layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr); gap:14px; }
     .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
     #percept { display:block; width:100%; aspect-ratio:4/3; background:#000; border-radius:8px; }
@@ -22,6 +23,9 @@
     #status { min-height:20px; color:var(--muted); margin-bottom:6px; }
     .row { display:flex; align-items:center; gap:8px; margin:9px 0; }
     .row label { width:145px; color:#d7e0e8; }
+    .tip { position:relative; display:inline-grid; place-items:center; width:17px; height:17px; flex:0 0 17px; border:1px solid #65798a; border-radius:50%; color:#afc0ce; font-size:11px; font-weight:700; cursor:help; }
+    .tip::after { content:attr(data-tip); position:absolute; z-index:30; bottom:calc(100% + 8px); left:50%; width:290px; padding:9px 10px; border:1px solid #40505e; border-radius:8px; background:#05090d; color:#edf4fa; font-size:12px; font-weight:400; line-height:1.35; box-shadow:0 7px 22px rgba(0,0,0,.5); opacity:0; visibility:hidden; transform:translateX(-50%) translateY(4px); transition:.12s ease; pointer-events:none; }
+    .tip:hover::after,.tip:focus::after { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
     input[type=range],select,input[type=number] { flex:1; min-width:90px; }
     select,input[type=number] { padding:6px; border-radius:6px; background:#0b1118; color:var(--text); border:1px solid var(--line); }
     output { width:58px; text-align:right; color:var(--green); font-variant-numeric:tabular-nums; }
@@ -37,13 +41,18 @@
     .debugCanvas { display:block; width:100%; aspect-ratio:4/3; background:#000; border-radius:6px; }
     details { margin-top:13px; color:var(--muted); }
     .note { color:var(--muted); font-size:12px; margin-top:8px; }
+    footer { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+    footer a { color:#8fdab1; }
+    .references { margin:6px 0 0; padding-left:20px; }
+    .references li { margin:3px 0; }
     @media(max-width:900px) { .layout{grid-template-columns:1fr}.debugGrid{grid-template-columns:repeat(2,1fr)} }
   </style>
 </head>
 <body>
 <main>
   <h1>Cortical phosphene vision simulator</h1>
-  <div class="sub">Fast client-side simulated prosthetic vision. Webcam frames remain in this browser.</div>
+  <div class="sub">Interactive simulation of camera-based visual encoding for a hypothetical penetrating-electrode array in human primary visual cortex (V1).</div>
+  <div class="modelGuide"><strong>What is being simulated:</strong> each electrode samples a camera-derived activation map and produces a localized white phosphene. Electrode density follows cortical magnification, while phosphene size reflects estimated electrical current spread in V1. <strong>Encoding modes:</strong> Sobel emphasizes local luminance boundaries; Luminance encodes image intensity directly; Luminance + Sobel combines surface brightness with boundary information. This is a research visualization, not a patient-specific prediction.</div>
 
   <div class="layout">
     <section class="panel">
@@ -65,10 +74,10 @@
       <div class="buttons">
         <button id="cameraToggle">Start camera</button>
       </div>
-      <div id="status">Ready. Camera frames never leave this page.</div>
+      <div id="status">Ready.</div>
 
       <div class="row">
-        <label>Field of view</label>
+        <label>Field of view</label><span class="tip" tabindex="0" data-tip="Diameter of the camera-centred visual field represented by the simulated electrode array. This is not gaze contingent because eye tracking is not modeled.">i</span>
         <div class="fovButtons" style="flex:1">
           <button id="smaller" class="secondary">−</button>
           <input id="fov" type="range" min="6" max="50" step="1" value="45">
@@ -77,35 +86,47 @@
         <output id="fovOut"></output>
       </div>
 
-      <div class="row"><label for="electrodeSlider">Electrodes</label><div class="pairedInput"><input id="electrodeSlider" type="range" min="1" max="10000" step="1" value="2048"><input id="electrodeCount" type="number" min="1" max="10000" step="1" value="2048"></div></div>
-      <div class="row"><label for="processingMode">Processing model</label><select id="processingMode"><option value="hybrid">Luminance + Sobel</option><option value="edge">Sobel boundaries</option><option value="luminance">Luminance</option></select></div>
-      <div class="row"><label for="spacingModel">Electrode spacing</label><select id="spacingModel"><option value="cortical">Human V1 magnification</option><option value="visual">Uniform visual angle</option></select></div>
-      <div class="row"><label for="spotSize">Phosphene size</label><input id="spotSize" type="range" min="0.25" max="3.0" step="0.05" value="1"><output id="spotSizeOut"></output></div>
-      <div class="row"><label for="dropout">Electrode dropout</label><input id="dropout" type="range" min="0" max="60" step="1" value="15"><output id="dropoutOut"></output></div>
-      <div class="row"><label for="jitter">Position irregularity</label><input id="jitter" type="range" min="0" max="80" step="1" value="25"><output id="jitterOut"></output></div>
-      <div class="row"><label for="threshold">Activation threshold</label><input id="threshold" type="range" min="0" max="0.8" step="0.01" value="0.18"><output id="thresholdOut"></output></div>
-      <div class="row" id="mixRow"><label for="edgeMix">Boundary contribution</label><input id="edgeMix" type="range" min="0" max="1" step="0.05" value="0.85"><output id="edgeMixOut"></output></div>
-      <div class="row"><label for="adaptationEnabled">Phosphene adaptation</label><input id="adaptationEnabled" type="checkbox"></div>
-      <div class="row"><label for="adaptTau">Adaptation time</label><input id="adaptTau" type="range" min="0.25" max="10" step="0.25" value="5"><output id="adaptTauOut"></output></div>
-      <div class="row"><label for="recoveryTau">Recovery time</label><input id="recoveryTau" type="range" min="0.5" max="30" step="0.5" value="8"><output id="recoveryTauOut"></output></div>
-      <div class="row"><label for="maxAttenuation">Max attenuation</label><input id="maxAttenuation" type="range" min="0" max="0.9" step="0.05" value="0.70"><output id="maxAttenuationOut"></output></div>
-      <div class="row"><label for="mirror">Mirror camera</label><input id="mirror" type="checkbox" checked></div>
-      <div class="row"><label for="showDebug">Update debug views</label><input id="showDebug" type="checkbox" checked></div>
+      <div class="row"><label for="electrodeSlider">Electrodes</label><span class="tip" tabindex="0" data-tip="Number of available stimulation sites distributed across the modeled visual field. Dropout is applied afterward, so the number of working electrodes may be lower.">i</span><div class="pairedInput"><input id="electrodeSlider" type="range" min="1" max="10000" step="1" value="2048"><input id="electrodeCount" type="number" min="1" max="10000" step="1" value="2048"></div></div>
+      <div class="row"><label for="processingMode">Processing model</label><span class="tip" tabindex="0" data-tip="Sobel boundaries encode local luminance gradients; Luminance directly encodes grayscale intensity; Luminance + Sobel forms a weighted mixture of both representations.">i</span><select id="processingMode"><option value="edge">Sobel boundaries</option><option value="luminance">Luminance</option><option value="hybrid">Luminance + Sobel</option></select></div>
+      <div class="row"><label for="spacingModel">Electrode spacing</label><span class="tip" tabindex="0" data-tip="Human V1 magnification allocates more electrodes to central vision according to M(E)=17.3/(E+0.75). Uniform visual angle is a comparison condition with equal visual-field density.">i</span><select id="spacingModel"><option value="cortical">Human V1 magnification</option><option value="visual">Uniform visual angle</option></select></div>
+      <div class="row"><label for="spotSize">Phosphene size</label><span class="tip" tabindex="0" data-tip="Multiplier on a current-spread-derived penetrating-electrode phosphene. Scale 1 corresponds to a 60 µA reference with K=675 µA/mm²; size also increases with eccentricity through inverse cortical magnification.">i</span><input id="spotSize" type="range" min="0.25" max="3.0" step="0.05" value="1.5"><output id="spotSizeOut"></output></div>
+      <div class="row"><label for="dropout">Electrode dropout</label><span class="tip" tabindex="0" data-tip="Fixed percentage of electrodes that do not generate a phosphene, approximating unavailable, ineffective, or subthreshold stimulation sites.">i</span><input id="dropout" type="range" min="0" max="60" step="1" value="10"><output id="dropoutOut"></output></div>
+      <div class="row"><label for="jitter">Position irregularity</label><span class="tip" tabindex="0" data-tip="Fixed positional displacement expressed as a percentage of the local electrode pitch. It prevents an unrealistically perfect phosphene lattice.">i</span><input id="jitter" type="range" min="0" max="80" step="1" value="25"><output id="jitterOut"></output></div>
+      <div class="row"><label for="threshold">Activation threshold</label><span class="tip" tabindex="0" data-tip="Minimum normalized encoder intensity required to activate an electrode. Electrode-specific threshold variability is added around this value.">i</span><input id="threshold" type="range" min="0" max="0.8" step="0.01" value="0.10"><output id="thresholdOut"></output></div>
+      <div class="row" id="mixRow"><label for="edgeMix">Boundary contribution</label><span class="tip" tabindex="0" data-tip="Used only for Luminance + Sobel. Zero gives luminance alone; one gives Sobel boundaries alone.">i</span><input id="edgeMix" type="range" min="0" max="1" step="0.05" value="0.85"><output id="edgeMixOut"></output></div>
+      <div class="row"><label for="adaptationEnabled">Phosphene adaptation</label><span class="tip" tabindex="0" data-tip="Optional phenomenological attenuation during sustained electrode activation. Phosphene onset remains immediate and recovery occurs while the electrode is inactive.">i</span><input id="adaptationEnabled" type="checkbox"></div>
+      <div class="row"><label for="adaptTau">Adaptation time</label><span class="tip" tabindex="0" data-tip="Exponential time constant for sustained attenuation. After one time constant, 63% of the selected maximum attenuation has developed.">i</span><input id="adaptTau" type="range" min="0.25" max="10" step="0.25" value="5"><output id="adaptTauOut"></output></div>
+      <div class="row"><label for="recoveryTau">Recovery time</label><span class="tip" tabindex="0" data-tip="Exponential recovery time constant while stimulation is absent. After one time constant, residual adaptation has fallen to 37%.">i</span><input id="recoveryTau" type="range" min="0.5" max="30" step="0.5" value="8"><output id="recoveryTauOut"></output></div>
+      <div class="row"><label for="maxAttenuation">Max attenuation</label><span class="tip" tabindex="0" data-tip="Largest asymptotic brightness reduction during uninterrupted activation. At 70% attenuation, a sustained phosphene retains 30% of its unadapted brightness.">i</span><input id="maxAttenuation" type="range" min="0" max="0.9" step="0.05" value="0.70"><output id="maxAttenuationOut"></output></div>
+      <div class="row"><label for="mirror">Mirror camera</label><span class="tip" tabindex="0" data-tip="Horizontally mirrors the camera image to behave like a conventional selfie preview.">i</span><input id="mirror" type="checkbox" checked></div>
+      <div class="row"><label for="showDebug">Update debug views</label><span class="tip" tabindex="0" data-tip="Displays the camera, grayscale image, Sobel map, selected encoder output, and electrode samples. Disabling these panels can improve frame rate.">i</span><input id="showDebug" type="checkbox" checked></div>
 
       <div class="readout">
         <div class="metric"><span>Processing</span><strong id="fpsValue">0</strong> FPS</div>
         <div class="metric"><span>Working electrodes</span><strong id="workingValue">0</strong></div>
       </div>
 
-      <div class="note">At size 1.0, phosphene extent is derived from a 60 µA penetrating-electrode reference and current spread K=675 µA/mm². Adaptation has immediate onset, exponential attenuation during continuous activation, and exponential recovery while inactive.</div>
     </aside>
   </div>
 
   <details>
     <summary>Model and limitations</summary>
-    <p>Processing uses luminance, Sobel boundaries, or a weighted combination. Electrodes sample that representation and draw Gaussian phosphenes above threshold. Human V1 spacing follows an isotropic Horton–Hoyt cortical-magnification approximation. Phosphene size is derived from cortical current spread, D=2√(I/K), converted into visual angle using local magnification; it is not a pRF-size estimate. The optional adaptation is a deliberately simple phenomenological model, not a stimulation-safety model.</p>
-    <p>References: Horton &amp; Hoyt (1991), <a href="https://doi.org/10.1001/archopht.1991.01080060080030" target="_blank">human striate-cortex map</a>; van der Grinten et al. (2024), <a href="https://doi.org/10.7554/eLife.85812" target="_blank">DynaPhoS current-spread phosphene model</a>.</p>
+    <p>The model assumes circular Gaussian phosphenes and linear summation across electrodes. It does not model patient-specific retinotopy, cortical folding, eye movements, nonlinear interactions between nearby electrodes, stimulation safety, or the full temporal structure of electrical pulse trains. Adaptation is a simple phenomenological approximation.</p>
   </details>
+
+  <footer>
+    <div><strong>Created by Patrick Jendritza, 2026</strong></div>
+    <div>Scientific references:</div>
+    <ol class="references">
+      <li><a href="https://doi.org/10.7554/eLife.85812" target="_blank">van der Grinten et al. (2024) — biologically plausible cortical phosphene simulation (DynaPhoS)</a></li>
+      <li><a href="https://doi.org/10.1001/archopht.1991.01080060080030" target="_blank">Horton &amp; Hoyt (1991) — retinotopic organization and cortical magnification in human V1</a></li>
+      <li><a href="https://doi.org/10.1523/JNEUROSCI.2896-16.2017" target="_blank">Bosking et al. (2017) — phosphene size as a function of current and eccentricity</a></li>
+      <li><a href="https://pubmed.ncbi.nlm.nih.gov/17173976/" target="_blank">Tehovnik &amp; Slocum (2007) — phosphene induction and current spread during macaque V1 microstimulation</a></li>
+      <li><a href="https://doi.org/10.1093/brain/119.2.507" target="_blank">Schmidt et al. (1996) — human intracortical phosphenes and temporal attenuation</a></li>
+      <li><a href="https://www.jci.org/articles/view/151331" target="_blank">Fernández et al. (2021) — chronic 96-channel intracortical stimulation in a blind participant</a></li>
+      <li><a href="https://doi.org/10.1016/j.cell.2020.04.033" target="_blank">Beauchamp et al. (2020) — dynamic cortical stimulation for form perception</a></li>
+    </ol>
+  </footer>
 </main>
 
 <script>
@@ -114,7 +135,7 @@
 // ================================================================
 const DEFAULTS=Object.freeze({
   electrodes:2048,
-  processingMode:'edge',             // hybrid, edge, or luminance
+  processingMode:'edge',               // edge, luminance, or hybrid
   fieldOfViewDeg:45,
   boundaryContribution:0.85,
   adaptationEnabled:false,
@@ -449,7 +470,7 @@ async function startCamera(){
     electrodes.forEach(electrode=>electrode.adaptation=0);
     cameraButton.textContent='Stop camera';
     cameraButton.disabled=false;
-    statusEl.textContent='Running locally in the browser.';
+    statusEl.textContent='Camera active.';
     requestAnimationFrame(loop);
   }catch(error){
     cameraButton.textContent='Start camera';
