@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cortical phosphene vision simulator</title>
+  <style>
+    :root { color-scheme:dark; --bg:#090d12; --panel:#121922; --line:#293441; --text:#edf4fa; --muted:#9baebe; --green:#55e596; --red:#ff6f72; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
+    main { max-width:1250px; margin:auto; padding:17px; }
+    h1 { margin:0 0 3px; font-size:23px; }
+    .sub { color:var(--muted); margin-bottom:13px; }
+    .layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr); gap:14px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
+    #percept { display:block; width:100%; aspect-ratio:4/3; background:#000; border-radius:8px; }
+    video,#processing { display:none; }
+    .buttons { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+    button { border:0; border-radius:8px; padding:9px 13px; font-weight:700; cursor:pointer; background:var(--green); color:#06150d; }
+    button.secondary { background:#2a3642; color:var(--text); }
+    button:disabled { opacity:.48; cursor:not-allowed; }
+    #status { min-height:20px; color:var(--muted); margin-bottom:6px; }
+    .row { display:flex; align-items:center; gap:8px; margin:9px 0; }
+    .row label { width:145px; color:#d7e0e8; }
+    input[type=range],select,input[type=number] { flex:1; min-width:90px; }
+    select,input[type=number] { padding:6px; border-radius:6px; background:#0b1118; color:var(--text); border:1px solid var(--line); }
+    output { width:58px; text-align:right; color:var(--green); font-variant-numeric:tabular-nums; }
+    .pairedInput { display:grid; grid-template-columns:minmax(110px,1fr) 82px; gap:7px; flex:1; }
+    .fovButtons { display:grid; grid-template-columns:auto 1fr auto; gap:7px; align-items:center; }
+    .readout { display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-top:12px; }
+    .metric { background:#0b1118; border-radius:8px; padding:9px; }
+    .metric span { display:block; color:var(--muted); font-size:11px; }
+    .metric strong { font-size:20px; font-variant-numeric:tabular-nums; }
+    .debugGrid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:12px; }
+    figure { margin:0; min-width:0; }
+    figcaption { color:var(--muted); font-size:11px; margin:0 0 4px 2px; }
+    .debugCanvas { display:block; width:100%; aspect-ratio:4/3; background:#000; border-radius:6px; }
+    details { margin-top:13px; color:var(--muted); }
+    .note { color:var(--muted); font-size:12px; margin-top:8px; }
+    @media(max-width:900px) { .layout{grid-template-columns:1fr}.debugGrid{grid-template-columns:repeat(2,1fr)} }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Cortical phosphene vision simulator</h1>
+  <div class="sub">Fast client-side simulated prosthetic vision. Webcam frames remain in this browser.</div>
+
+  <div class="layout">
+    <section class="panel">
+      <canvas id="percept" width="320" height="240"></canvas>
+      <video id="video" playsinline muted></video>
+      <canvas id="processing" width="320" height="240"></canvas>
+
+      <div class="debugGrid" id="debugGrid">
+        <figure><figcaption>1. Camera</figcaption><canvas class="debugCanvas" id="cameraDebug" width="320" height="240"></canvas></figure>
+        <figure><figcaption>2. Grayscale</figcaption><canvas class="debugCanvas" id="grayDebug" width="320" height="240"></canvas></figure>
+        <figure><figcaption id="stage3Caption">3. Sobel edges</figcaption><canvas class="debugCanvas" id="edgeDebug" width="320" height="240"></canvas></figure>
+        <figure><figcaption>4. Encoded image</figcaption><canvas class="debugCanvas" id="encodedDebug" width="320" height="240"></canvas></figure>
+        <figure><figcaption id="sampleCaption">5. Electrode samples</figcaption><canvas class="debugCanvas" id="sampleDebug" width="320" height="240"></canvas></figure>
+      </div>
+      <div class="note">Electrode view: white = active, gray outline = available but currently inactive, red = dropped electrode.</div>
+    </section>
+
+    <aside class="panel">
+      <div class="buttons">
+        <button id="cameraToggle">Start camera</button>
+      </div>
+      <div id="status">Ready. Camera frames never leave this page.</div>
+
+      <div class="row">
+        <label>Field of view</label>
+        <div class="fovButtons" style="flex:1">
+          <button id="smaller" class="secondary">−</button>
+          <input id="fov" type="range" min="6" max="50" step="1" value="45">
+          <button id="bigger" class="secondary">+</button>
+        </div>
+        <output id="fovOut"></output>
+      </div>
+
+      <div class="row"><label for="electrodeSlider">Electrodes</label><div class="pairedInput"><input id="electrodeSlider" type="range" min="1" max="10000" step="1" value="2048"><input id="electrodeCount" type="number" min="1" max="10000" step="1" value="2048"></div></div>
+      <div class="row"><label for="processingMode">Processing model</label><select id="processingMode"><option value="hybrid">Luminance + Sobel</option><option value="edge">Sobel boundaries</option><option value="luminance">Luminance</option></select></div>
+      <div class="row"><label for="spacingModel">Electrode spacing</label><select id="spacingModel"><option value="cortical">Human V1 magnification</option><option value="visual">Uniform visual angle</option></select></div>
+      <div class="row"><label for="spotSize">Phosphene size</label><input id="spotSize" type="range" min="0.25" max="3.0" step="0.05" value="1"><output id="spotSizeOut"></output></div>
+      <div class="row"><label for="dropout">Electrode dropout</label><input id="dropout" type="range" min="0" max="60" step="1" value="15"><output id="dropoutOut"></output></div>
+      <div class="row"><label for="jitter">Position irregularity</label><input id="jitter" type="range" min="0" max="80" step="1" value="25"><output id="jitterOut"></output></div>
+      <div class="row"><label for="threshold">Activation threshold</label><input id="threshold" type="range" min="0" max="0.8" step="0.01" value="0.18"><output id="thresholdOut"></output></div>
+      <div class="row" id="mixRow"><label for="edgeMix">Boundary contribution</label><input id="edgeMix" type="range" min="0" max="1" step="0.05" value="0.85"><output id="edgeMixOut"></output></div>
+      <div class="row"><label for="adaptationEnabled">Phosphene adaptation</label><input id="adaptationEnabled" type="checkbox"></div>
+      <div class="row"><label for="adaptTau">Adaptation time</label><input id="adaptTau" type="range" min="0.25" max="10" step="0.25" value="5"><output id="adaptTauOut"></output></div>
+      <div class="row"><label for="recoveryTau">Recovery time</label><input id="recoveryTau" type="range" min="0.5" max="30" step="0.5" value="8"><output id="recoveryTauOut"></output></div>
+      <div class="row"><label for="maxAttenuation">Max attenuation</label><input id="maxAttenuation" type="range" min="0" max="0.9" step="0.05" value="0.70"><output id="maxAttenuationOut"></output></div>
+      <div class="row"><label for="mirror">Mirror camera</label><input id="mirror" type="checkbox" checked></div>
+      <div class="row"><label for="showDebug">Update debug views</label><input id="showDebug" type="checkbox" checked></div>
+
+      <div class="readout">
+        <div class="metric"><span>Processing</span><strong id="fpsValue">0</strong> FPS</div>
+        <div class="metric"><span>Working electrodes</span><strong id="workingValue">0</strong></div>
+      </div>
+
+      <div class="note">At size 1.0, phosphene extent is derived from a 60 µA penetrating-electrode reference and current spread K=675 µA/mm². Adaptation has immediate onset, exponential attenuation during continuous activation, and exponential recovery while inactive.</div>
+    </aside>
+  </div>
+
+  <details>
+    <summary>Model and limitations</summary>
+    <p>Processing uses luminance, Sobel boundaries, or a weighted combination. Electrodes sample that representation and draw Gaussian phosphenes above threshold. Human V1 spacing follows an isotropic Horton–Hoyt cortical-magnification approximation. Phosphene size is derived from cortical current spread, D=2√(I/K), converted into visual angle using local magnification; it is not a pRF-size estimate. The optional adaptation is a deliberately simple phenomenological model, not a stimulation-safety model.</p>
+    <p>References: Horton &amp; Hoyt (1991), <a href="https://doi.org/10.1001/archopht.1991.01080060080030" target="_blank">human striate-cortex map</a>; van der Grinten et al. (2024), <a href="https://doi.org/10.7554/eLife.85812" target="_blank">DynaPhoS current-spread phosphene model</a>.</p>
+  </details>
+</main>
+
+<script>
+// ================================================================
+// EDIT STARTUP DEFAULTS HERE
+// ================================================================
+const DEFAULTS=Object.freeze({
+  electrodes:2048,
+  processingMode:'edge',             // hybrid, edge, or luminance
+  fieldOfViewDeg:45,
+  boundaryContribution:0.85,
+  adaptationEnabled:false,
+  adaptationTimeS:5,
+  recoveryTimeS:8,
+  maxAttenuation:0.70,
+  spacingModel:'cortical',             // cortical or visual
+  phospheneSize:1.5,
+  dropoutPercent:10,
+  positionIrregularityPercent:25,
+  activationThreshold:0.10,
+  mirrorCamera:true,
+  showDebugViews:true,
+  autoStartCamera:true
+});
+
+const W=320, H=240, CAMERA_HORIZONTAL_FOV_DEG=70, TARGET_FPS=30;
+const video=document.getElementById('video');
+const processing=document.getElementById('processing');
+const pctx=processing.getContext('2d',{willReadFrequently:true});
+const percept=document.getElementById('percept');
+const outctx=percept.getContext('2d');
+const cameraDebug=document.getElementById('cameraDebug');
+const cameraDebugCtx=cameraDebug.getContext('2d');
+const grayDebugCtx=document.getElementById('grayDebug').getContext('2d');
+const edgeDebugCtx=document.getElementById('edgeDebug').getContext('2d');
+const encodedDebugCtx=document.getElementById('encodedDebug').getContext('2d');
+const sampleDebugCtx=document.getElementById('sampleDebug').getContext('2d');
+const statusEl=document.getElementById('status');
+
+const controls={
+  fov:document.getElementById('fov'),
+  electrodeSlider:document.getElementById('electrodeSlider'),
+  electrodeCount:document.getElementById('electrodeCount'),
+  processingMode:document.getElementById('processingMode'),
+  spacingModel:document.getElementById('spacingModel'),
+  spotSize:document.getElementById('spotSize'),
+  dropout:document.getElementById('dropout'),
+  jitter:document.getElementById('jitter'),
+  threshold:document.getElementById('threshold'),
+  edgeMix:document.getElementById('edgeMix'),
+  adaptationEnabled:document.getElementById('adaptationEnabled'),
+  adaptTau:document.getElementById('adaptTau'),
+  recoveryTau:document.getElementById('recoveryTau'),
+  maxAttenuation:document.getElementById('maxAttenuation'),
+  mirror:document.getElementById('mirror'),
+  showDebug:document.getElementById('showDebug')
+};
+
+function applyDefaults(){
+  controls.electrodeSlider.value=DEFAULTS.electrodes;
+  controls.electrodeCount.value=DEFAULTS.electrodes;
+  controls.processingMode.value=DEFAULTS.processingMode;
+  controls.fov.value=DEFAULTS.fieldOfViewDeg;
+  controls.edgeMix.value=DEFAULTS.boundaryContribution;
+  controls.adaptationEnabled.checked=DEFAULTS.adaptationEnabled;
+  controls.adaptTau.value=DEFAULTS.adaptationTimeS;
+  controls.recoveryTau.value=DEFAULTS.recoveryTimeS;
+  controls.maxAttenuation.value=DEFAULTS.maxAttenuation;
+  controls.spacingModel.value=DEFAULTS.spacingModel;
+  controls.spotSize.value=DEFAULTS.phospheneSize;
+  controls.dropout.value=DEFAULTS.dropoutPercent;
+  controls.jitter.value=DEFAULTS.positionIrregularityPercent;
+  controls.threshold.value=DEFAULTS.activationThreshold;
+  controls.mirror.checked=DEFAULTS.mirrorCamera;
+  controls.showDebug.checked=DEFAULTS.showDebugViews;
+  document.getElementById('debugGrid').style.display=DEFAULTS.showDebugViews?'grid':'none';
+}
+
+applyDefaults();
+
+const gray=new Uint8ClampedArray(W*H);
+const edges=new Uint8ClampedArray(W*H);
+const encoded=new Uint8ClampedArray(W*H);
+const grayImage=grayDebugCtx.createImageData(W,H);
+const edgeImage=edgeDebugCtx.createImageData(W,H);
+const encodedImage=encodedDebugCtx.createImageData(W,H);
+let electrodes=[];
+let stream=null;
+let running=false;
+let cameraStarting=false;
+let lastProcessed=0;
+let frameCounter=0;
+let fps=0;
+
+function clamp(value,lo,hi){ return Math.max(lo,Math.min(hi,value)); }
+function mulberry32(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function randomNormal(rand){ const u=Math.max(rand(),1e-12),v=rand(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+function makeGaussianSprite(sigma){
+  const radius=Math.max(2,Math.ceil(3*sigma));
+  const size=2*radius+1;
+  const canvas=document.createElement('canvas');
+  canvas.width=size; canvas.height=size;
+  const ctx=canvas.getContext('2d');
+  const image=ctx.createImageData(size,size);
+  const denominator=2*sigma*sigma;
+  for(let y=0;y<size;y++){
+    for(let x=0;x<size;x++){
+      const dx=x-radius,dy=y-radius;
+      const alpha=Math.round(255*Math.exp(-(dx*dx+dy*dy)/denominator));
+      const j=4*(y*size+x);
+      image.data[j]=255; image.data[j+1]=255; image.data[j+2]=255; image.data[j+3]=alpha;
+    }
+  }
+  ctx.putImageData(image,0,0);
+  return {canvas,radius,sigma};
+}
+
+function buildElectrodes(){
+  const n=clamp(Math.round(Number(controls.electrodeCount.value)||1),1,10000);
+  controls.electrodeCount.value=n;
+  controls.electrodeSlider.value=n;
+  const fov=Number(controls.fov.value);
+  const maxEccentricity=fov/2;
+  const pixelsPerDegree=W/CAMERA_HORIZONTAL_FOV_DEG;
+  const apertureRadius=W*fov/(2*CAMERA_HORIZONTAL_FOV_DEG);
+  const spacingIsCortical=controls.spacingModel.value==='cortical';
+  const sizeScale=Number(controls.spotSize.value);
+  const jitterFraction=Number(controls.jitter.value)/100;
+  const dropout=Number(controls.dropout.value)/100;
+  const rand=mulberry32(19);
+  const sprites=[];
+  const e2=.75;
+  const corticalM0=17.3;
+  const referenceCurrentUa=60;
+  const currentSpreadUaPerMm2=675;
+  const corticalActivationRadiusMm=Math.sqrt(referenceCurrentUa/currentSpreadUaPerMm2);
+  const corticalAreaPrimitive=eccentricity=>Math.log((eccentricity+e2)/e2)+e2/(eccentricity+e2)-1;
+  const totalCorticalArea=2*Math.PI*corticalM0*corticalM0*corticalAreaPrimitive(maxEccentricity);
+  const corticalPitchMm=Math.sqrt(totalCorticalArea/n);
+
+  for(let band=0;band<12;band++){
+    const representativeEccentricity=maxEccentricity*(band+.5)/12;
+    const localMagnification=corticalM0/(representativeEccentricity+e2);
+    const sigmaDeg=corticalActivationRadiusMm/localMagnification;
+    const sigmaPx=Math.max(.55,sizeScale*sigmaDeg*pixelsPerDegree);
+    sprites.push(makeGaussianSprite(sigmaPx));
+  }
+
+  electrodes=[];
+  let workingCount=0;
+  const goldenAngle=Math.PI*(3-Math.sqrt(5));
+  for(let i=0;i<n;i++){
+    const areaFraction=(i+.5)/n;
+    let eccentricity;
+    if(spacingIsCortical){
+      const target=corticalAreaPrimitive(maxEccentricity)*areaFraction;
+      let lo=0,hi=maxEccentricity;
+      for(let iteration=0;iteration<22;iteration++){
+        const mid=(lo+hi)/2;
+        if(corticalAreaPrimitive(mid)<target) lo=mid; else hi=mid;
+      }
+      eccentricity=(lo+hi)/2;
+    }else{
+      eccentricity=maxEccentricity*Math.sqrt(areaFraction);
+    }
+    const visualRadius=eccentricity/maxEccentricity;
+    const theta=i*goldenAngle;
+    const uniformPitchDeg=Math.sqrt(Math.PI*maxEccentricity*maxEccentricity/n);
+    const localPitchDeg=spacingIsCortical ? corticalPitchMm*(eccentricity+e2)/corticalM0 : uniformPitchDeg;
+    const jitterSd=localPitchDeg*pixelsPerDegree*jitterFraction;
+    let x=(W-1)/2+apertureRadius*visualRadius*Math.cos(theta)+randomNormal(rand)*jitterSd;
+    let y=(H-1)/2+apertureRadius*visualRadius*Math.sin(theta)+randomNormal(rand)*jitterSd;
+    x=clamp(x,0,W-1); y=clamp(y,0,H-1);
+    const working=rand()>=dropout;
+    if(working) workingCount++;
+    const gain=clamp(Math.exp(.22*randomNormal(rand)),.55,1.55);
+    const thresholdOffset=.035*randomNormal(rand);
+    const spriteIndex=Math.min(11,Math.floor(visualRadius*12));
+    electrodes.push({x,y,working,gain,thresholdOffset,sprite:sprites[spriteIndex],amplitude:0,adaptation:0});
+  }
+  document.getElementById('workingValue').textContent=workingCount;
+  updateLabels();
+}
+
+function updateLabels(){
+  document.getElementById('fovOut').value=`${controls.fov.value}°`;
+  document.getElementById('spotSizeOut').value=Number(controls.spotSize.value).toFixed(2);
+  document.getElementById('dropoutOut').value=`${controls.dropout.value}%`;
+  document.getElementById('jitterOut').value=`${controls.jitter.value}%`;
+  document.getElementById('thresholdOut').value=Number(controls.threshold.value).toFixed(2);
+  document.getElementById('edgeMixOut').value=Number(controls.edgeMix.value).toFixed(2);
+  document.getElementById('adaptTauOut').value=`${Number(controls.adaptTau.value).toFixed(2)} s`;
+  document.getElementById('recoveryTauOut').value=`${Number(controls.recoveryTau.value).toFixed(1)} s`;
+  document.getElementById('maxAttenuationOut').value=`${Math.round(100*Number(controls.maxAttenuation.value))}%`;
+}
+
+function arrayToCanvas(array,image,ctx){
+  const data=image.data;
+  for(let i=0;i<array.length;i++){
+    const value=array[i],j=4*i;
+    data[j]=value; data[j+1]=value; data[j+2]=value; data[j+3]=255;
+  }
+  ctx.putImageData(image,0,0);
+}
+
+function updateProcessingUI(){
+  document.getElementById('mixRow').style.display=controls.processingMode.value==='hybrid'?'flex':'none';
+}
+
+function drawDebugViews(){
+  cameraDebugCtx.drawImage(processing,0,0,W,H);
+  arrayToCanvas(gray,grayImage,grayDebugCtx);
+  arrayToCanvas(edges,edgeImage,edgeDebugCtx);
+  arrayToCanvas(encoded,encodedImage,encodedDebugCtx);
+
+  sampleDebugCtx.fillStyle='#000'; sampleDebugCtx.fillRect(0,0,W,H);
+  const dense=electrodes.length>2000;
+  for(const electrode of electrodes){
+    if(dense){
+      if(!electrode.working) sampleDebugCtx.fillStyle='rgba(255,75,75,.72)';
+      else if(electrode.amplitude>.01){
+        const value=Math.round(80+175*clamp(electrode.amplitude,0,1));
+        sampleDebugCtx.fillStyle=`rgb(${value},${value},${value})`;
+      }else sampleDebugCtx.fillStyle='rgba(130,145,158,.55)';
+      sampleDebugCtx.fillRect(Math.round(electrode.x)-1,Math.round(electrode.y)-1,2,2);
+      continue;
+    }
+    sampleDebugCtx.beginPath();
+    sampleDebugCtx.arc(electrode.x,electrode.y,2.1,0,2*Math.PI);
+    if(!electrode.working){
+      sampleDebugCtx.fillStyle='rgba(255,75,75,.72)';
+      sampleDebugCtx.fill();
+    }else if(electrode.amplitude>.01){
+      const value=Math.round(80+175*clamp(electrode.amplitude,0,1));
+      sampleDebugCtx.fillStyle=`rgb(${value},${value},${value})`;
+      sampleDebugCtx.fill();
+    }else{
+      sampleDebugCtx.strokeStyle='rgba(150,165,178,.75)';
+      sampleDebugCtx.lineWidth=1;
+      sampleDebugCtx.stroke();
+    }
+  }
+}
+
+function processFrame(now){
+  const elapsed=now-lastProcessed;
+  if(elapsed<1000/TARGET_FPS) return;
+  lastProcessed=now;
+  const instantaneous=1000/Math.max(elapsed,1);
+  fps=fps===0 ? instantaneous : .9*fps+.1*instantaneous;
+
+  pctx.save();
+  if(controls.mirror.checked){ pctx.translate(W,0); pctx.scale(-1,1); }
+  pctx.drawImage(video,0,0,W,H);
+  pctx.restore();
+  const pixels=pctx.getImageData(0,0,W,H).data;
+
+  for(let i=0;i<gray.length;i++){
+    const j=4*i;
+    gray[i]=Math.round(.2126*pixels[j]+.7152*pixels[j+1]+.0722*pixels[j+2]);
+  }
+
+  edges.fill(0);
+  for(let y=1;y<H-1;y++){
+    let i=y*W+1;
+    for(let x=1;x<W-1;x++,i++){
+      const gx=-gray[i-W-1]+gray[i-W+1]-2*gray[i-1]+2*gray[i+1]-gray[i+W-1]+gray[i+W+1];
+      const gy=-gray[i-W-1]-2*gray[i-W]-gray[i-W+1]+gray[i+W-1]+2*gray[i+W]+gray[i+W+1];
+      edges[i]=Math.min(255,.32*(Math.abs(gx)+Math.abs(gy)));
+    }
+  }
+
+  const mode=controls.processingMode.value;
+  const edgeMix=Number(controls.edgeMix.value);
+  if(mode==='luminance') encoded.set(gray);
+  else if(mode==='edge') encoded.set(edges);
+  else{
+    for(let i=0;i<encoded.length;i++) encoded[i]=(1-edgeMix)*gray[i]+edgeMix*edges[i];
+  }
+
+  outctx.fillStyle='#000'; outctx.fillRect(0,0,W,H);
+  outctx.globalCompositeOperation='lighter';
+  const baseThreshold=Number(controls.threshold.value);
+  const useAdaptation=controls.adaptationEnabled.checked;
+  const adaptationTau=Math.max(.05,Number(controls.adaptTau.value));
+  const recoveryTau=Math.max(.05,Number(controls.recoveryTau.value));
+  const maximumAttenuation=clamp(Number(controls.maxAttenuation.value),0,.95);
+  const dtSeconds=Math.min(elapsed/1000,.25);
+  const adaptationStep=1-Math.exp(-dtSeconds/adaptationTau);
+  const recoveryFactor=Math.exp(-dtSeconds/recoveryTau);
+  for(const electrode of electrodes){
+    if(!electrode.working){ electrode.amplitude=0; electrode.adaptation=0; continue; }
+    const x=Math.round(electrode.x),y=Math.round(electrode.y);
+    const input=encoded[y*W+x]/255;
+    const threshold=clamp(baseThreshold+electrode.thresholdOffset,0,.95);
+    let rawAmplitude=clamp((input-threshold)/Math.max(1-threshold,.05),0,1);
+    rawAmplitude=Math.pow(rawAmplitude,.72)*electrode.gain;
+    let amplitude=rawAmplitude;
+    if(useAdaptation){
+      amplitude*=1-maximumAttenuation*electrode.adaptation;
+      if(rawAmplitude>=.012) electrode.adaptation+=(1-electrode.adaptation)*adaptationStep;
+      else electrode.adaptation*=recoveryFactor;
+    }else{
+      electrode.adaptation=0;
+    }
+    electrode.amplitude=amplitude;
+    if(amplitude<.012) continue;
+    outctx.globalAlpha=Math.min(1,amplitude);
+    const sprite=electrode.sprite;
+    outctx.drawImage(sprite.canvas,electrode.x-sprite.radius,electrode.y-sprite.radius);
+  }
+  outctx.globalAlpha=1;
+  outctx.globalCompositeOperation='source-over';
+
+  frameCounter++;
+  if(controls.showDebug.checked && frameCounter%3===0) drawDebugViews();
+  if(frameCounter%6===0){
+    document.getElementById('fpsValue').textContent=fps.toFixed(1);
+  }
+}
+
+function loop(now){
+  if(!running) return;
+  processFrame(now);
+  requestAnimationFrame(loop);
+}
+
+async function startCamera(){
+  if(running || cameraStarting) return;
+  cameraStarting=true;
+  const cameraButton=document.getElementById('cameraToggle');
+  cameraButton.disabled=true;
+  cameraButton.textContent='Starting camera…';
+  statusEl.textContent='Requesting camera access…';
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:30}},audio:false});
+    video.srcObject=stream;
+    await video.play();
+    running=true; lastProcessed=performance.now(); frameCounter=0; fps=0;
+    electrodes.forEach(electrode=>electrode.adaptation=0);
+    cameraButton.textContent='Stop camera';
+    cameraButton.disabled=false;
+    statusEl.textContent='Running locally in the browser.';
+    requestAnimationFrame(loop);
+  }catch(error){
+    cameraButton.textContent='Start camera';
+    cameraButton.disabled=false;
+    statusEl.textContent=`Camera could not start automatically: ${error.message}. Click Start camera to retry.`;
+  }finally{
+    cameraStarting=false;
+  }
+}
+
+function stopCamera(){
+  running=false;
+  if(stream) stream.getTracks().forEach(track=>track.stop());
+  stream=null; video.srcObject=null;
+  const cameraButton=document.getElementById('cameraToggle');
+  cameraButton.textContent='Start camera';
+  cameraButton.disabled=false;
+  statusEl.textContent='Stopped.';
+}
+
+function toggleCamera(){
+  if(running) stopCamera();
+  else startCamera();
+}
+
+['fov','spacingModel','spotSize','dropout','jitter'].forEach(name=>{
+  controls[name].addEventListener('input',buildElectrodes);
+  controls[name].addEventListener('change',buildElectrodes);
+});
+controls.electrodeSlider.addEventListener('input',()=>{ controls.electrodeCount.value=controls.electrodeSlider.value; buildElectrodes(); });
+controls.electrodeCount.addEventListener('input',()=>{
+  const value=clamp(Math.round(Number(controls.electrodeCount.value)||1),1,10000);
+  controls.electrodeSlider.value=value;
+  buildElectrodes();
+});
+controls.processingMode.addEventListener('change',updateProcessingUI);
+['threshold','edgeMix','adaptTau','recoveryTau','maxAttenuation'].forEach(name=>controls[name].addEventListener('input',updateLabels));
+controls.adaptationEnabled.addEventListener('change',()=>{
+  if(!controls.adaptationEnabled.checked) electrodes.forEach(electrode=>electrode.adaptation=0);
+});
+controls.showDebug.addEventListener('change',()=>{ document.getElementById('debugGrid').style.display=controls.showDebug.checked?'grid':'none'; });
+document.getElementById('smaller').addEventListener('click',()=>{ controls.fov.value=Math.max(6,Number(controls.fov.value)-5); buildElectrodes(); });
+document.getElementById('bigger').addEventListener('click',()=>{ controls.fov.value=Math.min(50,Number(controls.fov.value)+5); buildElectrodes(); });
+document.getElementById('cameraToggle').addEventListener('click',toggleCamera);
+window.addEventListener('beforeunload',stopCamera);
+
+buildElectrodes();
+updateProcessingUI();
+outctx.fillStyle='#000'; outctx.fillRect(0,0,W,H);
+drawDebugViews();
+if(DEFAULTS.autoStartCamera) startCamera();
+</script>
+</body>
+</html>
