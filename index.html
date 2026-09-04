@@ -74,7 +74,7 @@
 <main>
   <h1>Cortical phosphene vision simulator</h1>
   <div class="sub">Interactive simulation of camera-based visual encoding for a hypothetical penetrating-electrode array in human primary visual cortex (V1).</div>
-  <div class="modelGuide"><strong>What is being simulated:</strong> each electrode samples a camera-derived activation map and produces a localized white phosphene. Electrode density follows cortical magnification, while phosphene size reflects estimated electrical current spread in V1. <strong>Encoding modes:</strong> Sobel emphasizes local luminance boundaries; Luminance encodes image intensity directly; Luminance + Sobel combines surface brightness with boundary information. This is a research visualization, not a patient-specific prediction.</div>
+  <div class="modelGuide"><strong>What is being simulated:</strong> each electrode samples a camera-derived activation map and produces a localized white phosphene. Electrode density follows cortical magnification, while phosphene size reflects estimated electrical current spread in V1. Each electrode has a stable, mildly elliptical phosphene shape and orientation; central phosphenes tend to have more defined edges, while peripheral phosphenes become softer and cloudier. <strong>Encoding modes:</strong> Sobel emphasizes local luminance boundaries; Luminance encodes image intensity directly; Luminance + Sobel combines surface brightness with boundary information. This is a research visualization, not a patient-specific prediction.</div>
 
   <div class="layout">
     <section class="panel visualPanel">
@@ -134,7 +134,7 @@
 
   <details>
     <summary>Model and limitations</summary>
-    <p>The model assumes circular Gaussian phosphenes and linear summation across electrodes. It does not model patient-specific retinotopy, cortical folding, eye movements, nonlinear interactions between nearby electrodes, stimulation safety, or the full temporal structure of electrical pulse trains. Adaptation is a simple phenomenological approximation.</p>
+    <p>The model uses mildly elliptical generalized-Gaussian phosphenes with phenomenological eccentricity-dependent edge softness and linear summation across electrodes. The shape distribution is not calibrated to an individual patient. It does not model patient-specific retinotopy, cortical folding, eye movements, nonlinear interactions between nearby electrodes, stimulation safety, or the full temporal structure of electrical pulse trains. Adaptation is a simple phenomenological approximation.</p>
   </details>
 
   <footer>
@@ -148,6 +148,7 @@
       <li><a href="https://doi.org/10.1093/brain/119.2.507" target="_blank">Schmidt et al. (1996) — human intracortical phosphenes and temporal attenuation</a></li>
       <li><a href="https://www.jci.org/articles/view/151331" target="_blank">Fernández et al. (2021) — chronic 96-channel intracortical stimulation in a blind participant</a></li>
       <li><a href="https://doi.org/10.1016/j.cell.2020.04.033" target="_blank">Beauchamp et al. (2020) — dynamic cortical stimulation for form perception</a></li>
+      <li><a href="https://doi.org/10.1016/j.visres.2009.02.003" target="_blank">Chen et al. (2009) — reported phosphene appearance and eccentricity-dependent edge definition</a></li>
     </ol>
   </footer>
 </main>
@@ -172,7 +173,14 @@ const DEFAULTS=Object.freeze({
   activationThreshold:0.10,
   mirrorCamera:true,
   showDebugViews:true,
-  autoStartCamera:true
+  autoStartCamera:true,
+
+  // Electrode-specific phosphene appearance. Edge sharpness 1.0 is Gaussian;
+  // larger values have a flatter center and a steeper, but still smooth, edge.
+  maxPhospheneAspectRatio:4/3,
+  centralEdgeSharpness:2.05,
+  peripheralEdgeSharpness:1.00,
+  edgeSharpnessVariation:0.18
 });
 
 const W=320, H=240, CAMERA_HORIZONTAL_FOV_DEG=70, TARGET_FPS=30;
@@ -246,24 +254,32 @@ function clamp(value,lo,hi){ return Math.max(lo,Math.min(hi,value)); }
 function mulberry32(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 function randomNormal(rand){ const u=Math.max(rand(),1e-12),v=rand(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
 
-function makeGaussianSprite(sigma){
-  const radius=Math.max(2,Math.ceil(3*sigma));
+function makePhospheneSprite(sigma,aspectRatio,orientation,edgeSharpness){
+  // Preserve approximate area while stretching one axis.
+  const sigmaMajor=sigma*Math.sqrt(aspectRatio);
+  const sigmaMinor=sigma/Math.sqrt(aspectRatio);
+  const radius=Math.max(2,Math.ceil(3*sigmaMajor));
   const size=2*radius+1;
   const canvas=document.createElement('canvas');
   canvas.width=size; canvas.height=size;
   const ctx=canvas.getContext('2d');
   const image=ctx.createImageData(size,size);
-  const denominator=2*sigma*sigma;
+  const cosine=Math.cos(orientation),sine=Math.sin(orientation);
+  const majorVariance=sigmaMajor*sigmaMajor;
+  const minorVariance=sigmaMinor*sigmaMinor;
   for(let y=0;y<size;y++){
     for(let x=0;x<size;x++){
       const dx=x-radius,dy=y-radius;
-      const alpha=Math.round(255*Math.exp(-(dx*dx+dy*dy)/denominator));
+      const major=dx*cosine+dy*sine;
+      const minor=-dx*sine+dy*cosine;
+      const ellipticalDistance=(major*major)/majorVariance+(minor*minor)/minorVariance;
+      const alpha=Math.round(255*Math.exp(-.5*Math.pow(ellipticalDistance,edgeSharpness)));
       const j=4*(y*size+x);
       image.data[j]=255; image.data[j+1]=255; image.data[j+2]=255; image.data[j+3]=alpha;
     }
   }
   ctx.putImageData(image,0,0);
-  return {canvas,radius,sigma};
+  return {canvas,radius};
 }
 
 function buildElectrodes(){
@@ -280,6 +296,9 @@ function buildElectrodes(){
   const dropout=Number(controls.dropout.value)/100;
   const rand=mulberry32(19);
   const sprites=[];
+  const aspectBins=4,orientationBins=8,sharpnessBins=4;
+  const maximumAspect=Math.max(1,DEFAULTS.maxPhospheneAspectRatio);
+  const minimumSharpness=.9,maximumSharpness=2.2;
   const e2=.75;
   const corticalM0=17.3;
   const referenceCurrentUa=60;
@@ -294,7 +313,18 @@ function buildElectrodes(){
     const localMagnification=corticalM0/(representativeEccentricity+e2);
     const sigmaDeg=corticalActivationRadiusMm/localMagnification;
     const sigmaPx=Math.max(.55,sizeScale*sigmaDeg*pixelsPerDegree);
-    sprites.push(makeGaussianSprite(sigmaPx));
+    const bandSprites=[];
+    for(let aspectIndex=0;aspectIndex<aspectBins;aspectIndex++){
+      const aspectRatio=1+(maximumAspect-1)*aspectIndex/(aspectBins-1);
+      for(let orientationIndex=0;orientationIndex<orientationBins;orientationIndex++){
+        const orientation=Math.PI*orientationIndex/orientationBins;
+        for(let sharpnessIndex=0;sharpnessIndex<sharpnessBins;sharpnessIndex++){
+          const edgeSharpness=minimumSharpness+(maximumSharpness-minimumSharpness)*sharpnessIndex/(sharpnessBins-1);
+          bandSprites.push(makePhospheneSprite(sigmaPx,aspectRatio,orientation,edgeSharpness));
+        }
+      }
+    }
+    sprites.push(bandSprites);
   }
 
   electrodes=[];
@@ -327,7 +357,19 @@ function buildElectrodes(){
     const gain=clamp(Math.exp(.22*randomNormal(rand)),.55,1.55);
     const thresholdOffset=.035*randomNormal(rand);
     const spriteIndex=Math.min(11,Math.floor(visualRadius*12));
-    electrodes.push({x,y,working,gain,thresholdOffset,sprite:sprites[spriteIndex],amplitude:0,adaptation:0});
+    // Mild elongation, with more nearly round phosphenes remaining common.
+    const aspectRatio=1+(maximumAspect-1)*Math.pow(rand(),1.7);
+    const aspectIndex=Math.round((aspectRatio-1)/Math.max(maximumAspect-1,1e-6)*(aspectBins-1));
+    const orientationIndex=Math.floor(rand()*orientationBins)%orientationBins;
+
+    // Central phosphenes tend to be better defined, while peripheral ones are
+    // often cloudier. Random variation prevents an unrealistically rigid gradient.
+    const eccentricityMix=Math.pow(visualRadius,.8);
+    const expectedSharpness=DEFAULTS.centralEdgeSharpness*(1-eccentricityMix)+DEFAULTS.peripheralEdgeSharpness*eccentricityMix;
+    const edgeSharpness=clamp(expectedSharpness+DEFAULTS.edgeSharpnessVariation*randomNormal(rand),minimumSharpness,maximumSharpness);
+    const sharpnessIndex=Math.round((edgeSharpness-minimumSharpness)/(maximumSharpness-minimumSharpness)*(sharpnessBins-1));
+    const shapeIndex=(aspectIndex*orientationBins+orientationIndex)*sharpnessBins+sharpnessIndex;
+    electrodes.push({x,y,working,gain,thresholdOffset,sprite:sprites[spriteIndex][shapeIndex],amplitude:0,adaptation:0});
   }
   document.getElementById('workingValue').textContent=workingCount;
   updateLabels();
