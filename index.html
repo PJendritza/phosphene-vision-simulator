@@ -74,7 +74,7 @@
 <main>
   <h1>Cortical phosphene vision simulator</h1>
   <div class="sub">Interactive simulation of camera-based visual encoding for a hypothetical penetrating-electrode array in human primary visual cortex (V1).</div>
-  <div class="modelGuide"><strong>What is being simulated:</strong> each electrode samples a camera-derived activation map and produces a localized white phosphene. Electrode density follows cortical magnification, while phosphene size reflects estimated electrical current spread in V1. Each electrode has a stable, mildly elliptical phosphene shape and orientation; central phosphenes tend to have more defined edges, while peripheral phosphenes become softer and cloudier. <strong>Encoding modes:</strong> Sobel emphasizes local luminance boundaries; Luminance encodes image intensity directly; Luminance + Sobel combines surface brightness with boundary information. This is a research visualization, not a patient-specific prediction.</div>
+  <div class="modelGuide"><strong>What is being simulated:</strong> electrodes sample a camera-derived activation map. Above a manual threshold, Graded coding maps intensity to requested current and a saturating brightness response; Binary coding switches on a fixed, electrode-specific brightness. Electrode density follows a V1 cortical-magnification approximation, and phosphene size is estimated from electrical current spread. Stable, mildly elliptical spots have adjustable central and peripheral edge sharpness. <strong>Processing models:</strong> Sobel emphasizes local luminance boundaries; Luminance represents image intensity; Luminance + Sobel mixes both. Sobel has fixed gain, without automatic normalization. A smaller field of view restricts the electrode array to the central camera region without zooming the image. This is a research visualization, not a patient-specific prediction.</div>
 
   <div class="layout">
     <section class="panel visualPanel">
@@ -105,7 +105,7 @@
       <div class="row"><label for="spotSize">Phosphene size</label><span class="tip" tabindex="0" data-tip="Multiplier on a current-spread-derived penetrating-electrode phosphene. Scale 1 corresponds to a 60 µA reference with K=675 µA/mm²; size also increases with eccentricity through inverse cortical magnification.">i</span><input id="spotSize" type="range" min="0.25" max="3.0" step="0.05" value="1.5"><output id="spotSizeOut"></output></div>
       <div class="row"><label for="dropout">Electrode dropout</label><span class="tip" tabindex="0" data-tip="Fixed percentage of electrodes that do not generate a phosphene, approximating unavailable, ineffective, or subthreshold stimulation sites.">i</span><input id="dropout" type="range" min="0" max="60" step="1" value="10"><output id="dropoutOut"></output></div>
       <div class="row"><label for="jitter">Position irregularity</label><span class="tip" tabindex="0" data-tip="Fixed positional displacement expressed as a percentage of the local electrode pitch. It prevents an unrealistically perfect phosphene lattice.">i</span><input id="jitter" type="range" min="0" max="80" step="1" value="25"><output id="jitterOut"></output></div>
-      <div class="row"><label for="threshold">Activation threshold</label><span class="tip" tabindex="0" data-tip="Minimum normalized encoder intensity required to activate an electrode. Electrode-specific threshold variability is added around this value.">i</span><input id="threshold" type="range" min="0" max="0.8" step="0.01" value="0.10"><output id="thresholdOut"></output></div>
+      <div class="row"><label for="threshold">Activation threshold</label><span class="tip" tabindex="0" data-tip="Manual shared encoder gate (0–1). At or below this value electrodes are off. Above it, Binary gives a fixed electrode-specific brightness; Graded maps the remaining intensity range to current and a saturating brightness response. No automatic threshold or normalization is applied.">i</span><input id="threshold" type="range" min="0" max="1" step="0.01" value="0.10"><output id="thresholdOut"></output></div>
       <div class="row" id="mixRow"><label for="edgeMix">Boundary contribution</label><span class="tip" tabindex="0" data-tip="Used only for Luminance + Sobel. Zero gives luminance alone; one gives Sobel boundaries alone.">i</span><input id="edgeMix" type="range" min="0" max="1" step="0.05" value="0.85"><output id="edgeMixOut"></output></div>
       <div class="row"><label for="adaptationEnabled">Phosphene adaptation</label><span class="tip" tabindex="0" data-tip="Optional phenomenological attenuation during sustained electrode activation. Phosphene onset remains immediate and recovery occurs while the electrode is inactive.">i</span><input id="adaptationEnabled" type="checkbox"></div>
       <div class="row"><label for="adaptTau">Adaptation time</label><span class="tip" tabindex="0" data-tip="Exponential time constant for sustained attenuation. After one time constant, 63% of the selected maximum attenuation has developed.">i</span><input id="adaptTau" type="range" min="0.25" max="10" step="0.25" value="5"><output id="adaptTauOut"></output></div>
@@ -113,6 +113,10 @@
       <div class="row"><label for="maxAttenuation">Max attenuation</label><span class="tip" tabindex="0" data-tip="Largest asymptotic brightness reduction during uninterrupted activation. At 70% attenuation, a sustained phosphene retains 30% of its unadapted brightness.">i</span><input id="maxAttenuation" type="range" min="0" max="1" step="0.05" value="0.70"><output id="maxAttenuationOut"></output></div>
       <div class="row"><label for="mirror">Mirror camera</label><span class="tip" tabindex="0" data-tip="Horizontally mirrors the camera image to behave like a conventional selfie preview.">i</span><input id="mirror" type="checkbox" checked></div>
       <div class="row"><label for="showDebug">Update debug views</label><span class="tip" tabindex="0" data-tip="Displays the camera, Sobel map, selected encoder output, and electrode samples. Disabling these panels can improve frame rate.">i</span><input id="showDebug" type="checkbox" checked></div>
+
+      <div class="row"><label for="stimulationMode">Stimulation coding</label><span class="tip" tabindex="0" data-tip="Graded: encoder strength above threshold drives a saturating current–brightness model. Binary: input strictly above the same threshold switches on a fixed electrode-specific brightness, with optional adaptation. Binary is an encoding strategy, not a claim that perception is exclusively on/off.">i</span><select id="stimulationMode"><option value="graded">Graded brightness</option><option value="binary">Binary (on/off)</option></select></div>
+      <div class="row"><label for="centralSharpness">Central sharpness</label><span class="tip" tabindex="0" data-tip="Direct profile exponent near the center: 1 = Gaussian, 10 = steep but continuous edge. Changes edge steepness, not peak brightness or half-maximum width. Rendering remains antialiased; very small spots are still display-limited. Applied when you release the slider.">i</span><input id="centralSharpness" type="range" min="1" max="10" step="0.1" value="4"><output id="centralSharpnessOut"></output></div>
+      <div class="row"><label for="peripheralSharpness">Peripheral sharpness</label><span class="tip" tabindex="0" data-tip="Same profile exponent at the edge of the modeled field. Interpolated from the central setting, with stable small electrode-specific variation. This is a phenomenological appearance control, not a patient-calibrated measurement. Applied when you release the slider.">i</span><input id="peripheralSharpness" type="range" min="1" max="10" step="0.1" value="1"><output id="peripheralSharpnessOut"></output></div>
 
       <div class="readout">
         <div class="metric"><span>Processing</span><strong id="fpsValue">0</strong> FPS</div>
@@ -134,7 +138,8 @@
 
   <details>
     <summary>Model and limitations</summary>
-    <p>The model uses mildly elliptical generalized-Gaussian phosphenes with phenomenological eccentricity-dependent edge softness and linear summation across electrodes. The shape distribution is not calibrated to an individual patient. It does not model patient-specific retinotopy, cortical folding, eye movements, nonlinear interactions between nearby electrodes, stimulation safety, or the full temporal structure of electrical pulse trains. Adaptation is a simple phenomenological approximation.</p>
+    <p>The model uses mildly elliptical generalized-Gaussian profiles, with no separate halo, and additive blending capped by display brightness. Sharpness is an adjustable phenomenological parameter: the central-to-peripheral gradient is not calibrated to a patient. Sharpness preserves the peak and half-maximum contour, but changes integrated light. Size uses a fixed reference-current spread approximation, not dynamically varying spread with requested current. A minimum displayed size of 0.55 processing pixels (Gaussian-equivalent scale) keeps tiny spots visible; this is a rendering compromise, not a physiological minimum. Camera horizontal field of view is assumed to be 70°, not measured. The simulator omits patient-specific retinotopy, cortical folding, gaze tracking, nonlinear electrode interactions, stimulation safety, and pulse-train timing. Adaptation and the graded current–brightness response are simplified models; binary coding is a comparison strategy.</p>
+    <p>Build: simple shaped / graded–binary / manual threshold / no automatic Sobel gain / original FOV — 8 September 2026.</p>
   </details>
 
   <footer>
@@ -175,12 +180,25 @@ const DEFAULTS=Object.freeze({
   showDebugViews:true,
   autoStartCamera:true,
 
-  // Electrode-specific phosphene appearance. Edge sharpness 1.0 is Gaussian;
-  // larger values have a flatter center and a steeper, but still smooth, edge.
+  // Current-to-brightness model. Encoder intensity above activationThreshold
+  // requests a current from the electrode-specific threshold up to this maximum.
+  referenceCurrentUa:60,
+  maximumStimulationCurrentUa:120,
+  brightnessHalfSaturationUa:25,       // current above threshold giving half-max brightness
+  brightnessHillExponent:1.6,
+
+  // Stimulation coding: 'graded' or 'binary'. Both use the manual activation gate.
+  stimulationMode:'graded',
+  binaryMeanBrightness:0.88,
+  binaryBrightnessVariation:0.10,      // stable across frames; approximate SD
+
+  // Direct generalized-Gaussian exponent: 1 = Gaussian, 10 = steep soft edge.
+  // These are appearance controls, not measured physiological parameters.
   maxPhospheneAspectRatio:4/3,
-  centralEdgeSharpness:2.05,
-  peripheralEdgeSharpness:1.00,
-  edgeSharpnessVariation:0.18
+  centralEdgeSharpness:8.0,
+  peripheralEdgeSharpness:2.0,
+  edgeSharpnessVariation:0.18,
+  outputRenderScale:3                 // 960×720 output; processing stays 320×240
 });
 
 const W=320, H=240, CAMERA_HORIZONTAL_FOV_DEG=70, TARGET_FPS=30;
@@ -188,6 +206,9 @@ const video=document.getElementById('video');
 const processing=document.getElementById('processing');
 const pctx=processing.getContext('2d',{willReadFrequently:true});
 const percept=document.getElementById('percept');
+const OUTPUT_SCALE=Math.max(1,Math.round(DEFAULTS.outputRenderScale));
+percept.width=W*OUTPUT_SCALE;
+percept.height=H*OUTPUT_SCALE;
 const outctx=percept.getContext('2d');
 const cameraDebug=document.getElementById('cameraDebug');
 const cameraDebugCtx=cameraDebug.getContext('2d');
@@ -201,6 +222,9 @@ const controls={
   electrodeSlider:document.getElementById('electrodeSlider'),
   electrodeCount:document.getElementById('electrodeCount'),
   processingMode:document.getElementById('processingMode'),
+  stimulationMode:document.getElementById('stimulationMode'),
+  centralSharpness:document.getElementById('centralSharpness'),
+  peripheralSharpness:document.getElementById('peripheralSharpness'),
   spacingModel:document.getElementById('spacingModel'),
   spotSize:document.getElementById('spotSize'),
   dropout:document.getElementById('dropout'),
@@ -219,6 +243,9 @@ function applyDefaults(){
   controls.electrodeSlider.value=DEFAULTS.electrodes;
   controls.electrodeCount.value=DEFAULTS.electrodes;
   controls.processingMode.value=DEFAULTS.processingMode;
+  controls.stimulationMode.value=DEFAULTS.stimulationMode;
+  controls.centralSharpness.value=DEFAULTS.centralEdgeSharpness;
+  controls.peripheralSharpness.value=DEFAULTS.peripheralEdgeSharpness;
   controls.fov.value=DEFAULTS.fieldOfViewDeg;
   controls.edgeMix.value=DEFAULTS.boundaryContribution;
   controls.adaptationEnabled.checked=DEFAULTS.adaptationEnabled;
@@ -267,13 +294,27 @@ function makePhospheneSprite(sigma,aspectRatio,orientation,edgeSharpness){
   const cosine=Math.cos(orientation),sine=Math.sin(orientation);
   const majorVariance=sigmaMajor*sigmaMajor;
   const minorVariance=sigmaMinor*sigmaMinor;
+  // Apply sharpness directly to elliptical radius, never independently to x/y.
+  // Keep peak alpha and half-maximum contour fixed as sharpness changes.
+  const profileExponent=clamp(edgeSharpness,1,10);
+  const samplesPerAxis=3;
+  const sampleCount=samplesPerAxis*samplesPerAxis;
   for(let y=0;y<size;y++){
     for(let x=0;x<size;x++){
       const dx=x-radius,dy=y-radius;
-      const major=dx*cosine+dy*sine;
-      const minor=-dx*sine+dy*cosine;
-      const ellipticalDistance=(major*major)/majorVariance+(minor*minor)/minorVariance;
-      const alpha=Math.round(255*Math.exp(-.5*Math.pow(ellipticalDistance,edgeSharpness)));
+      let alphaSum=0;
+      // Subpixel integration keeps the edge elliptical at small sprite sizes.
+      for(let sampleY=0;sampleY<samplesPerAxis;sampleY++){
+        for(let sampleX=0;sampleX<samplesPerAxis;sampleX++){
+          const subpixelX=dx+(sampleX+.5)/samplesPerAxis-.5;
+          const subpixelY=dy+(sampleY+.5)/samplesPerAxis-.5;
+          const major=subpixelX*cosine+subpixelY*sine;
+          const minor=-subpixelX*sine+subpixelY*cosine;
+          const ellipticalDistance=(major*major)/majorVariance+(minor*minor)/minorVariance;
+          alphaSum+=Math.exp(-Math.LN2*Math.pow(ellipticalDistance/(2*Math.LN2),profileExponent));
+        }
+      }
+      const alpha=Math.round(255*alphaSum/sampleCount);
       const j=4*(y*size+x);
       image.data[j]=255; image.data[j+1]=255; image.data[j+2]=255; image.data[j+3]=alpha;
     }
@@ -296,12 +337,15 @@ function buildElectrodes(){
   const dropout=Number(controls.dropout.value)/100;
   const rand=mulberry32(19);
   const sprites=[];
-  const aspectBins=4,orientationBins=8,sharpnessBins=4;
+  const aspectBins=4,orientationBins=8,sharpnessBins=16;
   const maximumAspect=Math.max(1,DEFAULTS.maxPhospheneAspectRatio);
-  const minimumSharpness=.9,maximumSharpness=2.2;
+  const centralSharpness=Number(controls.centralSharpness.value);
+  const peripheralSharpness=Number(controls.peripheralSharpness.value);
+  const minimumSharpness=Math.max(1,Math.min(centralSharpness,peripheralSharpness)-3*DEFAULTS.edgeSharpnessVariation);
+  const maximumSharpness=Math.min(10,Math.max(minimumSharpness+.1,Math.max(centralSharpness,peripheralSharpness)+3*DEFAULTS.edgeSharpnessVariation));
   const e2=.75;
   const corticalM0=17.3;
-  const referenceCurrentUa=60;
+  const referenceCurrentUa=DEFAULTS.referenceCurrentUa;
   const currentSpreadUaPerMm2=675;
   const corticalActivationRadiusMm=Math.sqrt(referenceCurrentUa/currentSpreadUaPerMm2);
   const corticalAreaPrimitive=eccentricity=>Math.log((eccentricity+e2)/e2)+e2/(eccentricity+e2)-1;
@@ -312,19 +356,9 @@ function buildElectrodes(){
     const representativeEccentricity=maxEccentricity*(band+.5)/12;
     const localMagnification=corticalM0/(representativeEccentricity+e2);
     const sigmaDeg=corticalActivationRadiusMm/localMagnification;
-    const sigmaPx=Math.max(.55,sizeScale*sigmaDeg*pixelsPerDegree);
-    const bandSprites=[];
-    for(let aspectIndex=0;aspectIndex<aspectBins;aspectIndex++){
-      const aspectRatio=1+(maximumAspect-1)*aspectIndex/(aspectBins-1);
-      for(let orientationIndex=0;orientationIndex<orientationBins;orientationIndex++){
-        const orientation=Math.PI*orientationIndex/orientationBins;
-        for(let sharpnessIndex=0;sharpnessIndex<sharpnessBins;sharpnessIndex++){
-          const edgeSharpness=minimumSharpness+(maximumSharpness-minimumSharpness)*sharpnessIndex/(sharpnessBins-1);
-          bandSprites.push(makePhospheneSprite(sigmaPx,aspectRatio,orientation,edgeSharpness));
-        }
-      }
-    }
-    sprites.push(bandSprites);
+    // Retain the existing display-size floor; it is not a physiological minimum.
+    const sigmaPx=Math.max(.55,sizeScale*sigmaDeg*pixelsPerDegree)*OUTPUT_SCALE;
+    sprites.push({sigmaPx,cache:new Map()}); // Only generate shapes actually used.
   }
 
   electrodes=[];
@@ -356,6 +390,7 @@ function buildElectrodes(){
     if(working) workingCount++;
     const gain=clamp(Math.exp(.22*randomNormal(rand)),.55,1.55);
     const thresholdOffset=.035*randomNormal(rand);
+    const currentThresholdUa=clamp(referenceCurrentUa*Math.exp(.18*randomNormal(rand)),5,DEFAULTS.maximumStimulationCurrentUa-1);
     const spriteIndex=Math.min(11,Math.floor(visualRadius*12));
     // Mild elongation, with more nearly round phosphenes remaining common.
     const aspectRatio=1+(maximumAspect-1)*Math.pow(rand(),1.7);
@@ -365,17 +400,28 @@ function buildElectrodes(){
     // Central phosphenes tend to be better defined, while peripheral ones are
     // often cloudier. Random variation prevents an unrealistically rigid gradient.
     const eccentricityMix=Math.pow(visualRadius,.8);
-    const expectedSharpness=DEFAULTS.centralEdgeSharpness*(1-eccentricityMix)+DEFAULTS.peripheralEdgeSharpness*eccentricityMix;
+    const expectedSharpness=centralSharpness*(1-eccentricityMix)+peripheralSharpness*eccentricityMix;
     const edgeSharpness=clamp(expectedSharpness+DEFAULTS.edgeSharpnessVariation*randomNormal(rand),minimumSharpness,maximumSharpness);
     const sharpnessIndex=Math.round((edgeSharpness-minimumSharpness)/(maximumSharpness-minimumSharpness)*(sharpnessBins-1));
     const shapeIndex=(aspectIndex*orientationBins+orientationIndex)*sharpnessBins+sharpnessIndex;
-    electrodes.push({x,y,working,gain,thresholdOffset,sprite:sprites[spriteIndex][shapeIndex],amplitude:0,adaptation:0});
+    const band=sprites[spriteIndex];
+    if(!band.cache.has(shapeIndex)){
+      band.cache.set(shapeIndex,makePhospheneSprite(band.sigmaPx,
+        1+(maximumAspect-1)*aspectIndex/(aspectBins-1),
+        Math.PI*orientationIndex/orientationBins,
+        minimumSharpness+(maximumSharpness-minimumSharpness)*sharpnessIndex/(sharpnessBins-1)));
+    }
+    // Reuse stable gain variation without changing the seeded electrode layout.
+    const binaryBrightness=clamp(DEFAULTS.binaryMeanBrightness+DEFAULTS.binaryBrightnessVariation*Math.log(gain)/.22,.45,1);
+    electrodes.push({x,y,working,gain,binaryBrightness,thresholdOffset,currentThresholdUa,sprite:band.cache.get(shapeIndex),amplitude:0,adaptation:0});
   }
   document.getElementById('workingValue').textContent=workingCount;
   updateLabels();
 }
 
 function updateLabels(){
+  document.getElementById('centralSharpnessOut').value=Number(controls.centralSharpness.value).toFixed(1);
+  document.getElementById('peripheralSharpnessOut').value=Number(controls.peripheralSharpness.value).toFixed(1);
   document.getElementById('fovOut').value=`${controls.fov.value}°`;
   document.getElementById('spotSizeOut').value=Number(controls.spotSize.value).toFixed(2);
   document.getElementById('dropoutOut').value=`${controls.dropout.value}%`;
@@ -486,13 +532,18 @@ function processFrame(now){
     for(let i=0;i<encoded.length;i++) encoded[i]=(1-edgeMix)*gray[i]+edgeMix*edges[i];
   }
 
-  outctx.fillStyle='#000'; outctx.fillRect(0,0,W,H);
+  outctx.fillStyle='#000'; outctx.fillRect(0,0,percept.width,percept.height);
   outctx.globalCompositeOperation='lighter';
   const baseThreshold=Number(controls.threshold.value);
+  const binaryStimulation=controls.stimulationMode.value==='binary';
   const useAdaptation=controls.adaptationEnabled.checked;
   const adaptationTau=Math.max(.05,Number(controls.adaptTau.value));
   const recoveryTau=Math.max(.05,Number(controls.recoveryTau.value));
   const maximumAttenuation=clamp(Number(controls.maxAttenuation.value),0,.95);
+  const maximumCurrentUa=Math.max(DEFAULTS.maximumStimulationCurrentUa,DEFAULTS.referenceCurrentUa+1);
+  const halfSaturationUa=Math.max(.1,DEFAULTS.brightnessHalfSaturationUa);
+  const hillExponent=Math.max(.1,DEFAULTS.brightnessHillExponent);
+  const halfSaturationPower=Math.pow(halfSaturationUa,hillExponent);
   const dtSeconds=Math.min(elapsed/1000,.25);
   const adaptationStep=1-Math.exp(-dtSeconds/adaptationTau);
   const recoveryFactor=Math.exp(-dtSeconds/recoveryTau);
@@ -500,9 +551,23 @@ function processFrame(now){
     if(!electrode.working){ electrode.amplitude=0; electrode.adaptation=0; continue; }
     const x=Math.round(electrode.x),y=Math.round(electrode.y);
     const input=encoded[y*W+x]/255;
-    const threshold=clamp(baseThreshold+electrode.thresholdOffset,0,.95);
-    let rawAmplitude=clamp((input-threshold)/Math.max(1-threshold,.05),0,1);
-    rawAmplitude=Math.pow(rawAmplitude,.72)*electrode.gain;
+    // A single explicit encoder threshold for both coding modes. Variability
+    // in physiological current thresholds remains in the graded response.
+    const threshold=clamp(baseThreshold,0,1);
+    const encoderDrive=clamp((input-threshold)/Math.max(1-threshold,1e-6),0,1);
+    let rawAmplitude=0;
+    if(encoderDrive>0 && binaryStimulation){
+      rawAmplitude=electrode.binaryBrightness;
+    }else if(encoderDrive>0){
+      const currentThresholdUa=Math.min(electrode.currentThresholdUa,maximumCurrentUa-1e-3);
+      const requestedCurrentUa=currentThresholdUa+encoderDrive*(maximumCurrentUa-currentThresholdUa);
+      const currentAboveThresholdUa=Math.max(0,requestedCurrentUa-currentThresholdUa);
+      const currentPower=Math.pow(currentAboveThresholdUa,hillExponent);
+      const maximumCurrentPower=Math.pow(maximumCurrentUa-currentThresholdUa,hillExponent);
+      const brightness=currentPower/(currentPower+halfSaturationPower);
+      const maximumBrightness=maximumCurrentPower/(maximumCurrentPower+halfSaturationPower);
+      rawAmplitude=brightness/Math.max(maximumBrightness,1e-6)*electrode.gain;
+    }
     let amplitude=rawAmplitude;
     if(useAdaptation){
       amplitude*=1-maximumAttenuation*electrode.adaptation;
@@ -515,7 +580,7 @@ function processFrame(now){
     if(amplitude<.012) continue;
     outctx.globalAlpha=Math.min(1,amplitude);
     const sprite=electrode.sprite;
-    outctx.drawImage(sprite.canvas,electrode.x-sprite.radius,electrode.y-sprite.radius);
+    outctx.drawImage(sprite.canvas,electrode.x*OUTPUT_SCALE-sprite.radius,electrode.y*OUTPUT_SCALE-sprite.radius);
   }
   outctx.globalAlpha=1;
   outctx.globalCompositeOperation='source-over';
@@ -585,6 +650,18 @@ controls.electrodeCount.addEventListener('input',()=>{
   buildElectrodes();
 });
 controls.processingMode.addEventListener('change',updateProcessingUI);
+// Commit expensive sprite rebuilds on release; labels track the drag immediately.
+['centralSharpness','peripheralSharpness'].forEach(name=>{
+  controls[name].addEventListener('input',updateLabels);
+  controls[name].addEventListener('change',()=>{
+    const previous=electrodes;
+    buildElectrodes();
+    electrodes.forEach((electrode,i)=>{
+      electrode.adaptation=previous[i].adaptation;
+      electrode.amplitude=previous[i].amplitude;
+    });
+  });
+});
 ['threshold','edgeMix','adaptTau','recoveryTau','maxAttenuation'].forEach(name=>controls[name].addEventListener('input',updateLabels));
 controls.adaptationEnabled.addEventListener('change',()=>{
   if(!controls.adaptationEnabled.checked) electrodes.forEach(electrode=>electrode.adaptation=0);
@@ -597,7 +674,7 @@ window.addEventListener('beforeunload',stopCamera);
 
 buildElectrodes();
 updateProcessingUI();
-outctx.fillStyle='#000'; outctx.fillRect(0,0,W,H);
+outctx.fillStyle='#000'; outctx.fillRect(0,0,percept.width,percept.height);
 drawDebugViews();
 if(DEFAULTS.autoStartCamera) startCamera();
 </script>
