@@ -4,77 +4,481 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Cortical phosphene vision simulator</title>
+
   <style>
-    :root { color-scheme:dark; --bg:#090d12; --panel:#121922; --line:#293441; --text:#edf4fa; --muted:#9baebe; --green:#55e596; --red:#ff6f72; }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
-    main { width:100%; max-width:1250px; margin:auto; padding:17px max(17px,env(safe-area-inset-right)) 17px max(17px,env(safe-area-inset-left)); }
-    h1 { margin:0 0 3px; font-size:23px; }
-    .sub { color:var(--muted); margin-bottom:8px; }
-    .modelGuide { max-width:900px; color:#c8d4de; background:#0d141c; border-left:3px solid var(--green); border-radius:0 8px 8px 0; padding:9px 11px; margin-bottom:13px; }
-    .layout { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr); grid-template-areas:"visual controls" "debug controls"; gap:14px; align-items:start; }
-    .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
-    .visualPanel { grid-area:visual; min-width:0; }
-    .controlsPanel { grid-area:controls; min-width:0; }
-    .debugPanel { grid-area:debug; min-width:0; }
-    #percept { display:block; width:100%; height:auto; background:#000; border-radius:8px; }
-    video,#processing { display:none; }
-    .buttons { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
-    button { border:0; border-radius:8px; padding:9px 13px; font-weight:700; cursor:pointer; background:var(--green); color:#06150d; }
-    button.secondary { background:#2a3642; color:var(--text); }
-    button:disabled { opacity:.48; cursor:not-allowed; }
-    #status { min-height:20px; color:var(--muted); margin-bottom:6px; }
-    .row { display:flex; align-items:center; gap:8px; margin:9px 0; }
-    .row label { width:145px; color:#d7e0e8; }
-    .tip { position:relative; display:inline-grid; place-items:center; width:17px; height:17px; flex:0 0 17px; border:1px solid #65798a; border-radius:50%; color:#afc0ce; font-size:11px; font-weight:700; cursor:help; }
-    .tip::after { content:attr(data-tip); position:absolute; z-index:30; bottom:calc(100% + 8px); left:50%; width:290px; padding:9px 10px; border:1px solid #40505e; border-radius:8px; background:#05090d; color:#edf4fa; font-size:12px; font-weight:400; line-height:1.35; box-shadow:0 7px 22px rgba(0,0,0,.5); opacity:0; visibility:hidden; transform:translateX(-50%) translateY(4px); transition:.12s ease; pointer-events:none; }
-    .tip:hover::after,.tip:focus::after { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
-    input[type=range],select,input[type=number] { flex:1; min-width:90px; }
-    select,input[type=number] { padding:6px; border-radius:6px; background:#0b1118; color:var(--text); border:1px solid var(--line); }
-    output { width:58px; text-align:right; color:var(--green); font-variant-numeric:tabular-nums; }
-    .pairedInput { display:grid; grid-template-columns:minmax(110px,1fr) 82px; gap:7px; flex:1; }
-    .fovButtons { display:grid; grid-template-columns:auto 1fr auto; gap:7px; align-items:center; }
-    .readout { display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-top:12px; }
-    .metric { background:#0b1118; border-radius:8px; padding:9px; }
-    .metric span { display:block; color:var(--muted); font-size:11px; }
-    .metric strong { font-size:20px; font-variant-numeric:tabular-nums; }
-    .debugGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
-    figure { margin:0; min-width:0; }
-    figcaption { color:var(--muted); font-size:11px; margin:0 0 4px 2px; }
-    .debugCanvas { display:block; width:100%; height:auto; background:#000; border-radius:6px; }
-    details { margin-top:13px; color:var(--muted); }
-    .note { color:var(--muted); font-size:12px; margin-top:8px; }
-    footer { margin-top:16px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
-    footer a { color:#8fdab1; }
-    .references { margin:6px 0 0; padding-left:20px; }
-    .references li { margin:3px 0; }
-    @media(max-width:900px) {
-      .layout { grid-template-columns:minmax(0,1fr); grid-template-areas:"visual" "controls" "debug"; }
-      .debugGrid { grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); }
+    :root {
+      color-scheme: dark;
+      --bg: #090d12;
+      --panel: #121922;
+      --line: #293441;
+      --text: #edf4fa;
+      --muted: #9baebe;
+      --green: #55e596;
+      --red: #ff6f72;
     }
-    @media(max-width:600px) {
-      main { padding:10px max(10px,env(safe-area-inset-right)) 14px max(10px,env(safe-area-inset-left)); }
-      h1 { font-size:20px; line-height:1.2; }
-      .panel { padding:9px; border-radius:10px; }
-      .layout { gap:10px; }
-      .modelGuide { padding:8px 9px; }
-      .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 9px; margin:12px 0; }
-      .row label { width:auto; grid-column:1; grid-row:1; }
-      .row .tip { grid-column:2; grid-row:1; }
-      .row > input[type=range],.row > .fovButtons { grid-column:1; grid-row:2; width:100%; min-width:0; }
-      .row > output { grid-column:2; grid-row:2; align-self:center; }
-      .row > select,.row > .pairedInput { grid-column:1/-1; grid-row:2; width:100%; min-width:0; }
-      .row > input[type=checkbox] { grid-column:1/-1; grid-row:2; justify-self:start; width:20px; height:20px; }
-      .tip::after { position:fixed; left:12px; right:12px; bottom:auto; top:12px; width:auto; transform:translateY(-4px); }
-      .tip:hover::after,.tip:focus::after { transform:translateY(0); }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+
+    main {
+      width: 100%;
+      max-width: 1250px;
+      margin: auto;
+      padding: 17px max(17px, env(safe-area-inset-right))
+        17px max(17px, env(safe-area-inset-left));
+    }
+
+    h1 {
+      margin: 0 0 3px;
+      font-size: 23px;
+    }
+
+    .sub {
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .guideRow {
+      display: flex;
+      align-items: stretch;
+      gap: 14px;
+      margin-bottom: 13px;
+    }
+
+    .modelGuide {
+      flex: 1;
+      color: #c8d4de;
+      background: #0d141c;
+      border-left: 3px solid var(--green);
+      border-radius: 0 8px 8px 0;
+      padding: 9px 11px;
+    }
+
+    .qrCard {
+      flex: 0 0 150px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0d141c;
+    }
+
+    .qrCard img {
+      display: block;
+      width: 138px;
+      height: 138px;
+      background: white;
+      padding: 5px;
+      border-radius: 4px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr);
+      grid-template-areas:
+        "visual controls"
+        "debug controls";
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .visualPanel {
+      grid-area: visual;
+      min-width: 0;
+    }
+
+    .controlsPanel {
+      grid-area: controls;
+      min-width: 0;
+    }
+
+    .debugPanel {
+      grid-area: debug;
+      min-width: 0;
+    }
+
+    #percept {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #000;
+      border-radius: 8px;
+    }
+
+    video,
+    #processing {
+      display: none;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 13px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--green);
+      color: #06150d;
+    }
+
+    button.secondary {
+      background: #2a3642;
+      color: var(--text);
+    }
+
+    button:disabled {
+      opacity: .48;
+      cursor: not-allowed;
+    }
+
+    #status {
+      min-height: 20px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 9px 0;
+    }
+
+    .row label {
+      width: 145px;
+      color: #d7e0e8;
+    }
+
+    .tip {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 17px;
+      height: 17px;
+      flex: 0 0 17px;
+      border: 1px solid #65798a;
+      border-radius: 50%;
+      color: #afc0ce;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: help;
+    }
+
+    .tip::after {
+      content: attr(data-tip);
+      position: absolute;
+      z-index: 30;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      width: 290px;
+      padding: 9px 10px;
+      border: 1px solid #40505e;
+      border-radius: 8px;
+      background: #05090d;
+      color: #edf4fa;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.35;
+      box-shadow: 0 7px 22px rgba(0, 0, 0, .5);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(-50%) translateY(4px);
+      transition: .12s ease;
+      pointer-events: none;
+    }
+
+    .tip:hover::after,
+    .tip:focus::after {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    input[type=range],
+    select,
+    input[type=number] {
+      flex: 1;
+      min-width: 90px;
+    }
+
+    select,
+    input[type=number] {
+      padding: 6px;
+      border-radius: 6px;
+      background: #0b1118;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    output {
+      width: 58px;
+      text-align: right;
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pairedInput {
+      display: grid;
+      grid-template-columns: minmax(110px, 1fr) 82px;
+      gap: 7px;
+      flex: 1;
+    }
+
+    .fovButtons {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .readout {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 7px;
+      margin-top: 12px;
+    }
+
+    .metric {
+      background: #0b1118;
+      border-radius: 8px;
+      padding: 9px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .metric strong {
+      font-size: 20px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .debugGrid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    figure {
+      margin: 0;
+      min-width: 0;
+    }
+
+    figcaption {
+      color: var(--muted);
+      font-size: 11px;
+      margin: 0 0 4px 2px;
+    }
+
+    .debugCanvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #000;
+      border-radius: 6px;
+    }
+
+    details {
+      margin-top: 13px;
+      color: var(--muted);
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    footer {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    footer a {
+      color: #8fdab1;
+    }
+
+    .references {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+
+    .references li {
+      margin: 3px 0;
+    }
+
+    @media(max-width: 900px) {
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+          "visual"
+          "controls"
+          "debug";
+      }
+
+      .debugGrid {
+        grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      }
+    }
+
+    @media(max-width: 600px) {
+      main {
+        padding: 10px max(10px, env(safe-area-inset-right))
+          14px max(10px, env(safe-area-inset-left));
+      }
+
+      h1 {
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      .panel {
+        padding: 9px;
+        border-radius: 10px;
+      }
+
+      .layout {
+        gap: 10px;
+      }
+
+      .guideRow {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 9px;
+      }
+
+      .modelGuide {
+        padding: 8px 9px;
+      }
+
+      .qrCard {
+        flex-basis: 112px;
+        padding: 5px;
+        align-self: flex-end;
+      }
+
+      .qrCard img {
+        width: 102px;
+        height: 102px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 9px;
+        margin: 12px 0;
+      }
+
+      .row label {
+        width: auto;
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .row .tip {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .row > input[type=range],
+      .row > .fovButtons {
+        grid-column: 1;
+        grid-row: 2;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .row > output {
+        grid-column: 2;
+        grid-row: 2;
+        align-self: center;
+      }
+
+      .row > select,
+      .row > .pairedInput {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .row > input[type=checkbox] {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-self: start;
+        width: 20px;
+        height: 20px;
+      }
+
+      .tip::after {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        bottom: auto;
+        top: 12px;
+        width: auto;
+        transform: translateY(-4px);
+      }
+
+      .tip:hover::after,
+      .tip:focus::after {
+        transform: translateY(0);
+      }
     }
   </style>
 </head>
+
 <body>
 <main>
   <h1>Cortical phosphene vision simulator</h1>
-  <div class="sub">Interactive simulation of camera-based visual encoding for a hypothetical penetrating-electrode array in human primary visual cortex (V1).</div>
-  <div class="modelGuide"><strong>What is being simulated:</strong> electrodes sample a camera-derived activation map. Above a manual threshold, Graded coding maps intensity to requested current and a saturating brightness response; Binary coding switches on a fixed, electrode-specific brightness. Electrode density follows a V1 cortical-magnification approximation, and phosphene size is estimated from electrical current spread. Stable, mildly elliptical spots have adjustable central and peripheral edge sharpness. <strong>Processing models:</strong> Sobel emphasizes local luminance boundaries; Luminance represents image intensity; Luminance + Sobel mixes both. Sobel has fixed gain, without automatic normalization. A smaller field of view restricts the electrode array to the central camera region without zooming the image. This is a research visualization, not a patient-specific prediction.</div>
+
+  <div class="sub">
+    Interactive simulation of camera-based visual encoding for a hypothetical penetrating-electrode array in human primary visual cortex (V1).
+  </div>
+
+  <div class="guideRow">
+    <div class="modelGuide">
+      <strong>What is being simulated:</strong>
+      electrodes sample a camera-derived activation map. Above a manual threshold, Graded coding maps intensity to requested current and a saturating brightness response; Binary coding switches on a fixed, electrode-specific brightness. Electrode density follows a V1 cortical-magnification approximation, and phosphene size is estimated from electrical current spread. Stable, mildly elliptical spots have adjustable central and peripheral edge sharpness.
+
+      <strong>Processing models:</strong>
+      Sobel emphasizes local luminance boundaries; Luminance represents image intensity; Luminance + Sobel mixes both. Sobel has fixed gain, without automatic normalization. A smaller field of view restricts the electrode array to the central camera region without zooming the image. This is a research visualization, not a patient-specific prediction.
+    </div>
+
+    <div class="qrCard">
+      <img
+        src="QR_link_phosphene-vision-simulator.svg"
+        alt="QR code linking to the phosphene vision simulator">
+    </div>
+  </div>
 
   <div class="layout">
     <section class="panel visualPanel">
@@ -87,73 +491,288 @@
       <div class="buttons">
         <button id="cameraToggle">Start camera</button>
       </div>
+
       <div id="status">Ready.</div>
 
       <div class="row">
-        <label>Field of view</label><span class="tip" tabindex="0" data-tip="Diameter of the camera-centred visual field represented by the simulated electrode array. This is not gaze contingent because eye tracking is not modeled.">i</span>
+        <label>Field of view</label>
+        <span class="tip" tabindex="0"
+          data-tip="Diameter of the camera-centred visual field represented by the simulated electrode array. This is not gaze contingent because eye tracking is not modeled.">i</span>
+
         <div class="fovButtons" style="flex:1">
           <button id="smaller" class="secondary">−</button>
           <input id="fov" type="range" min="6" max="50" step="1" value="45">
           <button id="bigger" class="secondary">+</button>
         </div>
+
         <output id="fovOut"></output>
       </div>
 
-      <div class="row"><label for="electrodeSlider">Electrodes</label><span class="tip" tabindex="0" data-tip="Number of available stimulation sites distributed across the modeled visual field. Dropout is applied afterward, so the number of working electrodes may be lower.">i</span><div class="pairedInput"><input id="electrodeSlider" type="range" min="1" max="10000" step="1" value="2048"><input id="electrodeCount" type="number" min="1" max="10000" step="1" value="2048"></div></div>
-      <div class="row"><label for="processingMode">Processing model</label><span class="tip" tabindex="0" data-tip="Sobel boundaries encode local luminance gradients; Luminance directly encodes grayscale intensity; Luminance + Sobel forms a weighted mixture of both representations.">i</span><select id="processingMode"><option value="edge">Sobel boundaries</option><option value="luminance">Luminance</option><option value="hybrid">Luminance + Sobel</option></select></div>
-      <div class="row"><label for="spacingModel">Electrode spacing</label><span class="tip" tabindex="0" data-tip="Human V1 magnification allocates more electrodes to central vision according to M(E)=17.3/(E+0.75). Uniform visual angle is a comparison condition with equal visual-field density.">i</span><select id="spacingModel"><option value="cortical">Human V1 magnification</option><option value="visual">Uniform visual angle</option></select></div>
-      <div class="row"><label for="spotSize">Phosphene size</label><span class="tip" tabindex="0" data-tip="Multiplier on a current-spread-derived penetrating-electrode phosphene. Scale 1 corresponds to a 60 µA reference with K=675 µA/mm²; size also increases with eccentricity through inverse cortical magnification.">i</span><input id="spotSize" type="range" min="0.25" max="3.0" step="0.05" value="1.5"><output id="spotSizeOut"></output></div>
-      <div class="row"><label for="dropout">Electrode dropout</label><span class="tip" tabindex="0" data-tip="Fixed percentage of electrodes that do not generate a phosphene, approximating unavailable, ineffective, or subthreshold stimulation sites.">i</span><input id="dropout" type="range" min="0" max="60" step="1" value="10"><output id="dropoutOut"></output></div>
-      <div class="row"><label for="jitter">Position irregularity</label><span class="tip" tabindex="0" data-tip="Fixed positional displacement expressed as a percentage of the local electrode pitch. It prevents an unrealistically perfect phosphene lattice.">i</span><input id="jitter" type="range" min="0" max="80" step="1" value="25"><output id="jitterOut"></output></div>
-      <div class="row"><label for="threshold">Activation threshold</label><span class="tip" tabindex="0" data-tip="Manual shared encoder gate (0–1). At or below this value electrodes are off. Above it, Binary gives a fixed electrode-specific brightness; Graded maps the remaining intensity range to current and a saturating brightness response. No automatic threshold or normalization is applied.">i</span><input id="threshold" type="range" min="0" max="1" step="0.01" value="0.10"><output id="thresholdOut"></output></div>
-      <div class="row" id="mixRow"><label for="edgeMix">Boundary contribution</label><span class="tip" tabindex="0" data-tip="Used only for Luminance + Sobel. Zero gives luminance alone; one gives Sobel boundaries alone.">i</span><input id="edgeMix" type="range" min="0" max="1" step="0.05" value="0.85"><output id="edgeMixOut"></output></div>
-      <div class="row"><label for="adaptationEnabled">Phosphene adaptation</label><span class="tip" tabindex="0" data-tip="Optional phenomenological attenuation during sustained electrode activation. Phosphene onset remains immediate and recovery occurs while the electrode is inactive.">i</span><input id="adaptationEnabled" type="checkbox"></div>
-      <div class="row"><label for="adaptTau">Adaptation time</label><span class="tip" tabindex="0" data-tip="Exponential time constant for sustained attenuation. After one time constant, 63% of the selected maximum attenuation has developed.">i</span><input id="adaptTau" type="range" min="0.25" max="10" step="0.25" value="5"><output id="adaptTauOut"></output></div>
-      <div class="row"><label for="recoveryTau">Recovery time</label><span class="tip" tabindex="0" data-tip="Exponential recovery time constant while stimulation is absent. After one time constant, residual adaptation has fallen to 37%.">i</span><input id="recoveryTau" type="range" min="0.5" max="30" step="0.5" value="8"><output id="recoveryTauOut"></output></div>
-      <div class="row"><label for="maxAttenuation">Max attenuation</label><span class="tip" tabindex="0" data-tip="Largest asymptotic brightness reduction during uninterrupted activation. At 70% attenuation, a sustained phosphene retains 30% of its unadapted brightness.">i</span><input id="maxAttenuation" type="range" min="0" max="1" step="0.05" value="0.70"><output id="maxAttenuationOut"></output></div>
-      <div class="row"><label for="mirror">Mirror camera</label><span class="tip" tabindex="0" data-tip="Horizontally mirrors the camera image to behave like a conventional selfie preview.">i</span><input id="mirror" type="checkbox" checked></div>
-      <div class="row"><label for="showDebug">Update debug views</label><span class="tip" tabindex="0" data-tip="Displays the camera, Sobel map, selected encoder output, and electrode samples. Disabling these panels can improve frame rate.">i</span><input id="showDebug" type="checkbox" checked></div>
+      <div class="row">
+        <label for="electrodeSlider">Electrodes</label>
+        <span class="tip" tabindex="0"
+          data-tip="Number of available stimulation sites distributed across the modeled visual field. Dropout is applied afterward, so the number of working electrodes may be lower.">i</span>
 
-      <div class="row"><label for="stimulationMode">Stimulation coding</label><span class="tip" tabindex="0" data-tip="Graded: encoder strength above threshold drives a saturating current–brightness model. Binary: input strictly above the same threshold switches on a fixed electrode-specific brightness, with optional adaptation. Binary is an encoding strategy, not a claim that perception is exclusively on/off.">i</span><select id="stimulationMode"><option value="graded">Graded brightness</option><option value="binary">Binary (on/off)</option></select></div>
-      <div class="row"><label for="centralSharpness">Central sharpness</label><span class="tip" tabindex="0" data-tip="Direct profile exponent near the center: 1 = Gaussian, 10 = steep but continuous edge. Changes edge steepness, not peak brightness or half-maximum width. Rendering remains antialiased; very small spots are still display-limited. Applied when you release the slider.">i</span><input id="centralSharpness" type="range" min="1" max="10" step="0.1" value="4"><output id="centralSharpnessOut"></output></div>
-      <div class="row"><label for="peripheralSharpness">Peripheral sharpness</label><span class="tip" tabindex="0" data-tip="Same profile exponent at the edge of the modeled field. Interpolated from the central setting, with stable small electrode-specific variation. This is a phenomenological appearance control, not a patient-calibrated measurement. Applied when you release the slider.">i</span><input id="peripheralSharpness" type="range" min="1" max="10" step="0.1" value="1"><output id="peripheralSharpnessOut"></output></div>
-
-      <div class="readout">
-        <div class="metric"><span>Processing</span><strong id="fpsValue">0</strong> FPS</div>
-        <div class="metric"><span>Working electrodes</span><strong id="workingValue">0</strong></div>
+        <div class="pairedInput">
+          <input id="electrodeSlider" type="range" min="1" max="10000" step="1" value="2048">
+          <input id="electrodeCount" type="number" min="1" max="10000" step="1" value="2048">
+        </div>
       </div>
 
+      <div class="row">
+        <label for="processingMode">Processing model</label>
+        <span class="tip" tabindex="0"
+          data-tip="Sobel boundaries encode local luminance gradients; Luminance directly encodes grayscale intensity; Luminance + Sobel forms a weighted mixture of both representations.">i</span>
+
+        <select id="processingMode">
+          <option value="edge">Sobel boundaries</option>
+          <option value="luminance">Luminance</option>
+          <option value="hybrid">Luminance + Sobel</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="spacingModel">Electrode spacing</label>
+        <span class="tip" tabindex="0"
+          data-tip="Human V1 magnification allocates more electrodes to central vision according to M(E)=17.3/(E+0.75). Uniform visual angle is a comparison condition with equal visual-field density.">i</span>
+
+        <select id="spacingModel">
+          <option value="cortical">Human V1 magnification</option>
+          <option value="visual">Uniform visual angle</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="spotSize">Phosphene size</label>
+        <span class="tip" tabindex="0"
+          data-tip="Multiplier on a current-spread-derived penetrating-electrode phosphene. Scale 1 corresponds to a 60 µA reference with K=675 µA/mm²; size also increases with eccentricity through inverse cortical magnification.">i</span>
+
+        <input id="spotSize" type="range" min="0.25" max="3.0" step="0.05" value="1.5">
+        <output id="spotSizeOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="dropout">Electrode dropout</label>
+        <span class="tip" tabindex="0"
+          data-tip="Fixed percentage of electrodes that do not generate a phosphene, approximating unavailable, ineffective, or subthreshold stimulation sites.">i</span>
+
+        <input id="dropout" type="range" min="0" max="60" step="1" value="10">
+        <output id="dropoutOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="jitter">Position irregularity</label>
+        <span class="tip" tabindex="0"
+          data-tip="Fixed positional displacement expressed as a percentage of the local electrode pitch. It prevents an unrealistically perfect phosphene lattice.">i</span>
+
+        <input id="jitter" type="range" min="0" max="80" step="1" value="25">
+        <output id="jitterOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="threshold">Activation threshold</label>
+        <span class="tip" tabindex="0"
+          data-tip="Manual shared encoder gate (0–1). At or below this value electrodes are off. Above it, Binary gives a fixed electrode-specific brightness; Graded maps the remaining intensity range to current and a saturating brightness response. No automatic threshold or normalization is applied.">i</span>
+
+        <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.10">
+        <output id="thresholdOut"></output>
+      </div>
+
+      <div class="row" id="mixRow">
+        <label for="edgeMix">Boundary contribution</label>
+        <span class="tip" tabindex="0"
+          data-tip="Used only for Luminance + Sobel. Zero gives luminance alone; one gives Sobel boundaries alone.">i</span>
+
+        <input id="edgeMix" type="range" min="0" max="1" step="0.05" value="0.85">
+        <output id="edgeMixOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="adaptationEnabled">Phosphene adaptation</label>
+        <span class="tip" tabindex="0"
+          data-tip="Optional phenomenological attenuation during sustained electrode activation. Phosphene onset remains immediate and recovery occurs while the electrode is inactive.">i</span>
+
+        <input id="adaptationEnabled" type="checkbox">
+      </div>
+
+      <div class="row">
+        <label for="adaptTau">Adaptation time</label>
+        <span class="tip" tabindex="0"
+          data-tip="Exponential time constant for sustained attenuation. After one time constant, 63% of the selected maximum attenuation has developed.">i</span>
+
+        <input id="adaptTau" type="range" min="0.25" max="10" step="0.25" value="5">
+        <output id="adaptTauOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="recoveryTau">Recovery time</label>
+        <span class="tip" tabindex="0"
+          data-tip="Exponential recovery time constant while stimulation is absent. After one time constant, residual adaptation has fallen to 37%.">i</span>
+
+        <input id="recoveryTau" type="range" min="0.5" max="30" step="0.5" value="8">
+        <output id="recoveryTauOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="maxAttenuation">Max attenuation</label>
+        <span class="tip" tabindex="0"
+          data-tip="Largest asymptotic brightness reduction during uninterrupted activation. At 70% attenuation, a sustained phosphene retains 30% of its unadapted brightness.">i</span>
+
+        <input id="maxAttenuation" type="range" min="0" max="1" step="0.05" value="0.70">
+        <output id="maxAttenuationOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="mirror">Mirror camera</label>
+        <span class="tip" tabindex="0"
+          data-tip="Horizontally mirrors the camera image to behave like a conventional selfie preview.">i</span>
+
+        <input id="mirror" type="checkbox" checked>
+      </div>
+
+      <div class="row">
+        <label for="showDebug">Update debug views</label>
+        <span class="tip" tabindex="0"
+          data-tip="Displays the camera, Sobel map, selected encoder output, and electrode samples. Disabling these panels can improve frame rate.">i</span>
+
+        <input id="showDebug" type="checkbox" checked>
+      </div>
+
+      <div class="row">
+        <label for="stimulationMode">Stimulation coding</label>
+        <span class="tip" tabindex="0"
+          data-tip="Graded: encoder strength above threshold drives a saturating current–brightness model. Binary: input strictly above the same threshold switches on a fixed electrode-specific brightness, with optional adaptation. Binary is an encoding strategy, not a claim that perception is exclusively on/off.">i</span>
+
+        <select id="stimulationMode">
+          <option value="graded">Graded brightness</option>
+          <option value="binary">Binary (on/off)</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="centralSharpness">Central sharpness</label>
+        <span class="tip" tabindex="0"
+          data-tip="Direct profile exponent near the center: 1 = Gaussian, 10 = steep but continuous edge. Changes edge steepness, not peak brightness or half-maximum width. Rendering remains antialiased; very small spots are still display-limited. Applied when you release the slider.">i</span>
+
+        <input id="centralSharpness" type="range" min="1" max="10" step="0.1" value="8">
+        <output id="centralSharpnessOut"></output>
+      </div>
+
+      <div class="row">
+        <label for="peripheralSharpness">Peripheral sharpness</label>
+        <span class="tip" tabindex="0"
+          data-tip="Same profile exponent at the edge of the modeled field. Interpolated from the central setting, with stable small electrode-specific variation. This is a phenomenological appearance control, not a patient-calibrated measurement. Applied when you release the slider.">i</span>
+
+        <input id="peripheralSharpness" type="range" min="1" max="10" step="0.1" value="2">
+        <output id="peripheralSharpnessOut"></output>
+      </div>
+
+      <div class="readout">
+        <div class="metric">
+          <span>Processing</span>
+          <strong id="fpsValue">0</strong> FPS
+        </div>
+
+        <div class="metric">
+          <span>Working electrodes</span>
+          <strong id="workingValue">0</strong>
+        </div>
+      </div>
     </aside>
 
     <section class="panel debugPanel" id="debugPanel">
       <div class="debugGrid" id="debugGrid">
-        <figure><figcaption>1. Camera</figcaption><canvas class="debugCanvas" id="cameraDebug" width="320" height="240"></canvas></figure>
-        <figure><figcaption>2. Sobel edges</figcaption><canvas class="debugCanvas" id="edgeDebug" width="320" height="240"></canvas></figure>
-        <figure><figcaption>3. Encoded image</figcaption><canvas class="debugCanvas" id="encodedDebug" width="320" height="240"></canvas></figure>
-        <figure><figcaption>4. Electrode samples</figcaption><canvas class="debugCanvas" id="sampleDebug" width="320" height="240"></canvas></figure>
+        <figure>
+          <figcaption>1. Camera</figcaption>
+          <canvas class="debugCanvas" id="cameraDebug" width="320" height="240"></canvas>
+        </figure>
+
+        <figure>
+          <figcaption>2. Sobel edges</figcaption>
+          <canvas class="debugCanvas" id="edgeDebug" width="320" height="240"></canvas>
+        </figure>
+
+        <figure>
+          <figcaption>3. Encoded image</figcaption>
+          <canvas class="debugCanvas" id="encodedDebug" width="320" height="240"></canvas>
+        </figure>
+
+        <figure>
+          <figcaption>4. Electrode samples</figcaption>
+          <canvas class="debugCanvas" id="sampleDebug" width="320" height="240"></canvas>
+        </figure>
       </div>
-      <div class="note">Electrode view: white = active, gray outline = available but currently inactive, red = dropped electrode.</div>
+
+      <div class="note">
+        Electrode view: white = active, gray outline = available but currently inactive, red = dropped electrode.
+      </div>
     </section>
   </div>
 
   <details>
     <summary>Model and limitations</summary>
-    <p>The model uses mildly elliptical generalized-Gaussian profiles, with no separate halo, and additive blending capped by display brightness. Sharpness is an adjustable phenomenological parameter: the central-to-peripheral gradient is not calibrated to a patient. Sharpness preserves the peak and half-maximum contour, but changes integrated light. Size uses a fixed reference-current spread approximation, not dynamically varying spread with requested current. A minimum displayed size of 0.55 processing pixels (Gaussian-equivalent scale) keeps tiny spots visible; this is a rendering compromise, not a physiological minimum. Camera horizontal field of view is assumed to be 70°, not measured. The simulator omits patient-specific retinotopy, cortical folding, gaze tracking, nonlinear electrode interactions, stimulation safety, and pulse-train timing. Adaptation and the graded current–brightness response are simplified models; binary coding is a comparison strategy.</p>
-    <p>Build: simple shaped / graded–binary / manual threshold / no automatic Sobel gain / original FOV — 8 September 2026.</p>
+
+    <p>
+      The model uses mildly elliptical generalized-Gaussian profiles, with no separate halo, and additive blending capped by display brightness. Sharpness is an adjustable phenomenological parameter: the central-to-peripheral gradient is not calibrated to a patient. Sharpness preserves the peak and half-maximum contour, but changes integrated light. Size uses a fixed reference-current spread approximation, not dynamically varying spread with requested current. A minimum displayed size of 0.55 processing pixels (Gaussian-equivalent scale) keeps tiny spots visible; this is a rendering compromise, not a physiological minimum. Camera horizontal field of view is assumed to be 70°, not measured. The simulator omits patient-specific retinotopy, cortical folding, gaze tracking, nonlinear electrode interactions, stimulation safety, and pulse-train timing. Adaptation and the graded current–brightness response are simplified models; binary coding is a comparison strategy.
+    </p>
+
+    <p>
+      Build: simple shaped / graded–binary / manual threshold / no automatic Sobel gain / original FOV — 8 September 2026.
+    </p>
   </details>
 
   <footer>
     <div><strong>Created by Patrick Jendritza, 2026</strong></div>
     <div>Scientific references:</div>
+
     <ol class="references">
-      <li><a href="https://doi.org/10.7554/eLife.85812" target="_blank">van der Grinten et al. (2024) — biologically plausible cortical phosphene simulation (DynaPhoS)</a></li>
-      <li><a href="https://doi.org/10.1001/archopht.1991.01080060080030" target="_blank">Horton &amp; Hoyt (1991) — retinotopic organization and cortical magnification in human V1</a></li>
-      <li><a href="https://doi.org/10.1523/JNEUROSCI.2896-16.2017" target="_blank">Bosking et al. (2017) — phosphene size as a function of current and eccentricity</a></li>
-      <li><a href="https://pubmed.ncbi.nlm.nih.gov/17173976/" target="_blank">Tehovnik &amp; Slocum (2007) — phosphene induction and current spread during macaque V1 microstimulation</a></li>
-      <li><a href="https://doi.org/10.1093/brain/119.2.507" target="_blank">Schmidt et al. (1996) — human intracortical phosphenes and temporal attenuation</a></li>
-      <li><a href="https://www.jci.org/articles/view/151331" target="_blank">Fernández et al. (2021) — chronic 96-channel intracortical stimulation in a blind participant</a></li>
-      <li><a href="https://doi.org/10.1016/j.cell.2020.04.033" target="_blank">Beauchamp et al. (2020) — dynamic cortical stimulation for form perception</a></li>
-      <li><a href="https://doi.org/10.1016/j.visres.2009.02.003" target="_blank">Chen et al. (2009) — reported phosphene appearance and eccentricity-dependent edge definition</a></li>
+      <li>
+        <a href="https://doi.org/10.7554/eLife.85812" target="_blank">
+          van der Grinten et al. (2024) — biologically plausible cortical phosphene simulation (DynaPhoS)
+        </a>
+      </li>
+
+      <li>
+        <a href="https://doi.org/10.1001/archopht.1991.01080060080030" target="_blank">
+          Horton &amp; Hoyt (1991) — retinotopic organization and cortical magnification in human V1
+        </a>
+      </li>
+
+      <li>
+        <a href="https://doi.org/10.1523/JNEUROSCI.2896-16.2017" target="_blank">
+          Bosking et al. (2017) — phosphene size as a function of current and eccentricity
+        </a>
+      </li>
+
+      <li>
+        <a href="https://pubmed.ncbi.nlm.nih.gov/17173976/" target="_blank">
+          Tehovnik &amp; Slocum (2007) — phosphene induction and current spread during macaque V1 microstimulation
+        </a>
+      </li>
+
+      <li>
+        <a href="https://doi.org/10.1093/brain/119.2.507" target="_blank">
+          Schmidt et al. (1996) — human intracortical phosphenes and temporal attenuation
+        </a>
+      </li>
+
+      <li>
+        <a href="https://www.jci.org/articles/view/151331" target="_blank">
+          Fernández et al. (2021) — chronic 96-channel intracortical stimulation in a blind participant
+        </a>
+      </li>
+
+      <li>
+        <a href="https://doi.org/10.1016/j.cell.2020.04.033" target="_blank">
+          Beauchamp et al. (2020) — dynamic cortical stimulation for form perception
+        </a>
+      </li>
+
+      <li>
+        <a href="https://doi.org/10.1016/j.visres.2009.02.003" target="_blank">
+          Chen et al. (2009) — reported phosphene appearance and eccentricity-dependent edge definition
+        </a>
+      </li>
     </ol>
   </footer>
 </main>
@@ -162,521 +781,1667 @@
 // ================================================================
 // EDIT STARTUP DEFAULTS HERE
 // ================================================================
-const DEFAULTS=Object.freeze({
-  electrodes:2048,
-  processingMode:'edge',               // edge, luminance, or hybrid
-  fieldOfViewDeg:45,
-  boundaryContribution:0.85,
-  adaptationEnabled:false,
-  adaptationTimeS:5,
-  recoveryTimeS:8,
-  maxAttenuation:0.70,
-  spacingModel:'cortical',             // cortical or visual
-  phospheneSize:1.5,
-  dropoutPercent:10,
-  positionIrregularityPercent:25,
-  activationThreshold:0.10,
-  mirrorCamera:true,
-  showDebugViews:true,
-  autoStartCamera:true,
 
-  // Current-to-brightness model. Encoder intensity above activationThreshold
-  // requests a current from the electrode-specific threshold up to this maximum.
-  referenceCurrentUa:60,
-  maximumStimulationCurrentUa:120,
-  brightnessHalfSaturationUa:25,       // current above threshold giving half-max brightness
-  brightnessHillExponent:1.6,
+const DEFAULTS = Object.freeze({
+  electrodes: 2048,
+  processingMode: 'edge',
+  fieldOfViewDeg: 45,
+  boundaryContribution: 0.85,
 
-  // Stimulation coding: 'graded' or 'binary'. Both use the manual activation gate.
-  stimulationMode:'graded',
-  binaryMeanBrightness:0.88,
-  binaryBrightnessVariation:0.10,      // stable across frames; approximate SD
+  adaptationEnabled: false,
+  adaptationTimeS: 5,
+  recoveryTimeS: 8,
+  maxAttenuation: 0.70,
 
-  // Direct generalized-Gaussian exponent: 1 = Gaussian, 10 = steep soft edge.
-  // These are appearance controls, not measured physiological parameters.
-  maxPhospheneAspectRatio:4/3,
-  centralEdgeSharpness:8.0,
-  peripheralEdgeSharpness:2.0,
-  edgeSharpnessVariation:0.18,
-  outputRenderScale:3                 // 960×720 output; processing stays 320×240
+  spacingModel: 'cortical',
+  phospheneSize: 1.5,
+  dropoutPercent: 10,
+  positionIrregularityPercent: 25,
+  activationThreshold: 0.10,
+
+  mirrorCamera: true,
+  showDebugViews: true,
+  autoStartCamera: true,
+
+  referenceCurrentUa: 60,
+  maximumStimulationCurrentUa: 120,
+  brightnessHalfSaturationUa: 25,
+  brightnessHillExponent: 1.6,
+
+  stimulationMode: 'graded',
+  binaryMeanBrightness: 0.88,
+  binaryBrightnessVariation: 0.10,
+
+  maxPhospheneAspectRatio: 4 / 3,
+  centralEdgeSharpness: 3.0,
+  peripheralEdgeSharpness: 1.0,
+  edgeSharpnessVariation: 0.20,
+
+  outputRenderScale: 3
 });
 
-const W=320, H=240, CAMERA_HORIZONTAL_FOV_DEG=70, TARGET_FPS=30;
-const video=document.getElementById('video');
-const processing=document.getElementById('processing');
-const pctx=processing.getContext('2d',{willReadFrequently:true});
-const percept=document.getElementById('percept');
-const OUTPUT_SCALE=Math.max(1,Math.round(DEFAULTS.outputRenderScale));
-percept.width=W*OUTPUT_SCALE;
-percept.height=H*OUTPUT_SCALE;
-const outctx=percept.getContext('2d');
-const cameraDebug=document.getElementById('cameraDebug');
-const cameraDebugCtx=cameraDebug.getContext('2d');
-const edgeDebugCtx=document.getElementById('edgeDebug').getContext('2d');
-const encodedDebugCtx=document.getElementById('encodedDebug').getContext('2d');
-const sampleDebugCtx=document.getElementById('sampleDebug').getContext('2d');
-const statusEl=document.getElementById('status');
+const W = 320;
+const H = 240;
+const CAMERA_HORIZONTAL_FOV_DEG = 70;
+const TARGET_FPS = 30;
 
-const controls={
-  fov:document.getElementById('fov'),
-  electrodeSlider:document.getElementById('electrodeSlider'),
-  electrodeCount:document.getElementById('electrodeCount'),
-  processingMode:document.getElementById('processingMode'),
-  stimulationMode:document.getElementById('stimulationMode'),
-  centralSharpness:document.getElementById('centralSharpness'),
-  peripheralSharpness:document.getElementById('peripheralSharpness'),
-  spacingModel:document.getElementById('spacingModel'),
-  spotSize:document.getElementById('spotSize'),
-  dropout:document.getElementById('dropout'),
-  jitter:document.getElementById('jitter'),
-  threshold:document.getElementById('threshold'),
-  edgeMix:document.getElementById('edgeMix'),
-  adaptationEnabled:document.getElementById('adaptationEnabled'),
-  adaptTau:document.getElementById('adaptTau'),
-  recoveryTau:document.getElementById('recoveryTau'),
-  maxAttenuation:document.getElementById('maxAttenuation'),
-  mirror:document.getElementById('mirror'),
-  showDebug:document.getElementById('showDebug')
+const video = document.getElementById('video');
+const processing = document.getElementById('processing');
+const pctx = processing.getContext('2d', {
+  willReadFrequently: true
+});
+
+const percept = document.getElementById('percept');
+const OUTPUT_SCALE =
+  Math.max(1, Math.round(DEFAULTS.outputRenderScale));
+
+percept.width = W * OUTPUT_SCALE;
+percept.height = H * OUTPUT_SCALE;
+
+const outctx = percept.getContext('2d');
+
+const cameraDebug =
+  document.getElementById('cameraDebug');
+
+const cameraDebugCtx =
+  cameraDebug.getContext('2d');
+
+const edgeDebugCtx =
+  document.getElementById('edgeDebug').getContext('2d');
+
+const encodedDebugCtx =
+  document.getElementById('encodedDebug').getContext('2d');
+
+const sampleDebugCtx =
+  document.getElementById('sampleDebug').getContext('2d');
+
+const statusEl =
+  document.getElementById('status');
+
+const controls = {
+  fov: document.getElementById('fov'),
+  electrodeSlider: document.getElementById('electrodeSlider'),
+  electrodeCount: document.getElementById('electrodeCount'),
+  processingMode: document.getElementById('processingMode'),
+  stimulationMode: document.getElementById('stimulationMode'),
+  centralSharpness: document.getElementById('centralSharpness'),
+  peripheralSharpness: document.getElementById('peripheralSharpness'),
+  spacingModel: document.getElementById('spacingModel'),
+  spotSize: document.getElementById('spotSize'),
+  dropout: document.getElementById('dropout'),
+  jitter: document.getElementById('jitter'),
+  threshold: document.getElementById('threshold'),
+  edgeMix: document.getElementById('edgeMix'),
+  adaptationEnabled: document.getElementById('adaptationEnabled'),
+  adaptTau: document.getElementById('adaptTau'),
+  recoveryTau: document.getElementById('recoveryTau'),
+  maxAttenuation: document.getElementById('maxAttenuation'),
+  mirror: document.getElementById('mirror'),
+  showDebug: document.getElementById('showDebug')
 };
 
-function applyDefaults(){
-  controls.electrodeSlider.value=DEFAULTS.electrodes;
-  controls.electrodeCount.value=DEFAULTS.electrodes;
-  controls.processingMode.value=DEFAULTS.processingMode;
-  controls.stimulationMode.value=DEFAULTS.stimulationMode;
-  controls.centralSharpness.value=DEFAULTS.centralEdgeSharpness;
-  controls.peripheralSharpness.value=DEFAULTS.peripheralEdgeSharpness;
-  controls.fov.value=DEFAULTS.fieldOfViewDeg;
-  controls.edgeMix.value=DEFAULTS.boundaryContribution;
-  controls.adaptationEnabled.checked=DEFAULTS.adaptationEnabled;
-  controls.adaptTau.value=DEFAULTS.adaptationTimeS;
-  controls.recoveryTau.value=DEFAULTS.recoveryTimeS;
-  controls.maxAttenuation.value=DEFAULTS.maxAttenuation;
-  controls.spacingModel.value=DEFAULTS.spacingModel;
-  controls.spotSize.value=DEFAULTS.phospheneSize;
-  controls.dropout.value=DEFAULTS.dropoutPercent;
-  controls.jitter.value=DEFAULTS.positionIrregularityPercent;
-  controls.threshold.value=DEFAULTS.activationThreshold;
-  controls.mirror.checked=DEFAULTS.mirrorCamera;
-  controls.showDebug.checked=DEFAULTS.showDebugViews;
-  document.getElementById('debugPanel').style.display=DEFAULTS.showDebugViews?'block':'none';
+function applyDefaults() {
+  controls.electrodeSlider.value =
+    DEFAULTS.electrodes;
+
+  controls.electrodeCount.value =
+    DEFAULTS.electrodes;
+
+  controls.processingMode.value =
+    DEFAULTS.processingMode;
+
+  controls.stimulationMode.value =
+    DEFAULTS.stimulationMode;
+
+  controls.centralSharpness.value =
+    DEFAULTS.centralEdgeSharpness;
+
+  controls.peripheralSharpness.value =
+    DEFAULTS.peripheralEdgeSharpness;
+
+  controls.fov.value =
+    DEFAULTS.fieldOfViewDeg;
+
+  controls.edgeMix.value =
+    DEFAULTS.boundaryContribution;
+
+  controls.adaptationEnabled.checked =
+    DEFAULTS.adaptationEnabled;
+
+  controls.adaptTau.value =
+    DEFAULTS.adaptationTimeS;
+
+  controls.recoveryTau.value =
+    DEFAULTS.recoveryTimeS;
+
+  controls.maxAttenuation.value =
+    DEFAULTS.maxAttenuation;
+
+  controls.spacingModel.value =
+    DEFAULTS.spacingModel;
+
+  controls.spotSize.value =
+    DEFAULTS.phospheneSize;
+
+  controls.dropout.value =
+    DEFAULTS.dropoutPercent;
+
+  controls.jitter.value =
+    DEFAULTS.positionIrregularityPercent;
+
+  controls.threshold.value =
+    DEFAULTS.activationThreshold;
+
+  controls.mirror.checked =
+    DEFAULTS.mirrorCamera;
+
+  controls.showDebug.checked =
+    DEFAULTS.showDebugViews;
+
+  document.getElementById('debugPanel').style.display =
+    DEFAULTS.showDebugViews ? 'block' : 'none';
 }
 
 applyDefaults();
 
-const gray=new Uint8ClampedArray(W*H);
-const edges=new Uint8ClampedArray(W*H);
-const encoded=new Uint8ClampedArray(W*H);
-const edgeImage=edgeDebugCtx.createImageData(W,H);
-const encodedImage=encodedDebugCtx.createImageData(W,H);
-let electrodes=[];
-let stream=null;
-let running=false;
-let cameraStarting=false;
-let lastProcessed=0;
-let frameCounter=0;
-let fps=0;
+const gray =
+  new Uint8ClampedArray(W * H);
 
-function clamp(value,lo,hi){ return Math.max(lo,Math.min(hi,value)); }
-function mulberry32(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-function randomNormal(rand){ const u=Math.max(rand(),1e-12),v=rand(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+const edges =
+  new Uint8ClampedArray(W * H);
 
-function makePhospheneSprite(sigma,aspectRatio,orientation,edgeSharpness){
-  // Preserve approximate area while stretching one axis.
-  const sigmaMajor=sigma*Math.sqrt(aspectRatio);
-  const sigmaMinor=sigma/Math.sqrt(aspectRatio);
-  const radius=Math.max(2,Math.ceil(3*sigmaMajor));
-  const size=2*radius+1;
-  const canvas=document.createElement('canvas');
-  canvas.width=size; canvas.height=size;
-  const ctx=canvas.getContext('2d');
-  const image=ctx.createImageData(size,size);
-  const cosine=Math.cos(orientation),sine=Math.sin(orientation);
-  const majorVariance=sigmaMajor*sigmaMajor;
-  const minorVariance=sigmaMinor*sigmaMinor;
-  // Apply sharpness directly to elliptical radius, never independently to x/y.
-  // Keep peak alpha and half-maximum contour fixed as sharpness changes.
-  const profileExponent=clamp(edgeSharpness,1,10);
-  const samplesPerAxis=3;
-  const sampleCount=samplesPerAxis*samplesPerAxis;
-  for(let y=0;y<size;y++){
-    for(let x=0;x<size;x++){
-      const dx=x-radius,dy=y-radius;
-      let alphaSum=0;
-      // Subpixel integration keeps the edge elliptical at small sprite sizes.
-      for(let sampleY=0;sampleY<samplesPerAxis;sampleY++){
-        for(let sampleX=0;sampleX<samplesPerAxis;sampleX++){
-          const subpixelX=dx+(sampleX+.5)/samplesPerAxis-.5;
-          const subpixelY=dy+(sampleY+.5)/samplesPerAxis-.5;
-          const major=subpixelX*cosine+subpixelY*sine;
-          const minor=-subpixelX*sine+subpixelY*cosine;
-          const ellipticalDistance=(major*major)/majorVariance+(minor*minor)/minorVariance;
-          alphaSum+=Math.exp(-Math.LN2*Math.pow(ellipticalDistance/(2*Math.LN2),profileExponent));
-        }
-      }
-      const alpha=Math.round(255*alphaSum/sampleCount);
-      const j=4*(y*size+x);
-      image.data[j]=255; image.data[j+1]=255; image.data[j+2]=255; image.data[j+3]=alpha;
-    }
-  }
-  ctx.putImageData(image,0,0);
-  return {canvas,radius};
+const encoded =
+  new Uint8ClampedArray(W * H);
+
+const edgeImage =
+  edgeDebugCtx.createImageData(W, H);
+
+const encodedImage =
+  encodedDebugCtx.createImageData(W, H);
+
+let electrodes = [];
+let stream = null;
+let running = false;
+let cameraStarting = false;
+let lastProcessed = 0;
+let frameCounter = 0;
+let fps = 0;
+
+function clamp(value, lo, hi) {
+  return Math.max(lo, Math.min(hi, value));
 }
 
-function buildElectrodes(){
-  const n=clamp(Math.round(Number(controls.electrodeCount.value)||1),1,10000);
-  controls.electrodeCount.value=n;
-  controls.electrodeSlider.value=n;
-  const fov=Number(controls.fov.value);
-  const maxEccentricity=fov/2;
-  const pixelsPerDegree=W/CAMERA_HORIZONTAL_FOV_DEG;
-  const apertureRadius=W*fov/(2*CAMERA_HORIZONTAL_FOV_DEG);
-  const spacingIsCortical=controls.spacingModel.value==='cortical';
-  const sizeScale=Number(controls.spotSize.value);
-  const jitterFraction=Number(controls.jitter.value)/100;
-  const dropout=Number(controls.dropout.value)/100;
-  const rand=mulberry32(19);
-  const sprites=[];
-  const aspectBins=4,orientationBins=8,sharpnessBins=16;
-  const maximumAspect=Math.max(1,DEFAULTS.maxPhospheneAspectRatio);
-  const centralSharpness=Number(controls.centralSharpness.value);
-  const peripheralSharpness=Number(controls.peripheralSharpness.value);
-  const minimumSharpness=Math.max(1,Math.min(centralSharpness,peripheralSharpness)-3*DEFAULTS.edgeSharpnessVariation);
-  const maximumSharpness=Math.min(10,Math.max(minimumSharpness+.1,Math.max(centralSharpness,peripheralSharpness)+3*DEFAULTS.edgeSharpnessVariation));
-  const e2=.75;
-  const corticalM0=17.3;
-  const referenceCurrentUa=DEFAULTS.referenceCurrentUa;
-  const currentSpreadUaPerMm2=675;
-  const corticalActivationRadiusMm=Math.sqrt(referenceCurrentUa/currentSpreadUaPerMm2);
-  const corticalAreaPrimitive=eccentricity=>Math.log((eccentricity+e2)/e2)+e2/(eccentricity+e2)-1;
-  const totalCorticalArea=2*Math.PI*corticalM0*corticalM0*corticalAreaPrimitive(maxEccentricity);
-  const corticalPitchMm=Math.sqrt(totalCorticalArea/n);
+function mulberry32(seed) {
+  return function() {
+    seed |= 0;
+    seed = seed + 0x6D2B79F5 | 0;
 
-  for(let band=0;band<12;band++){
-    const representativeEccentricity=maxEccentricity*(band+.5)/12;
-    const localMagnification=corticalM0/(representativeEccentricity+e2);
-    const sigmaDeg=corticalActivationRadiusMm/localMagnification;
-    // Retain the existing display-size floor; it is not a physiological minimum.
-    const sigmaPx=Math.max(.55,sizeScale*sigmaDeg*pixelsPerDegree)*OUTPUT_SCALE;
-    sprites.push({sigmaPx,cache:new Map()}); // Only generate shapes actually used.
-  }
+    let t =
+      Math.imul(seed ^ seed >>> 15, 1 | seed);
 
-  electrodes=[];
-  let workingCount=0;
-  const goldenAngle=Math.PI*(3-Math.sqrt(5));
-  for(let i=0;i<n;i++){
-    const areaFraction=(i+.5)/n;
-    let eccentricity;
-    if(spacingIsCortical){
-      const target=corticalAreaPrimitive(maxEccentricity)*areaFraction;
-      let lo=0,hi=maxEccentricity;
-      for(let iteration=0;iteration<22;iteration++){
-        const mid=(lo+hi)/2;
-        if(corticalAreaPrimitive(mid)<target) lo=mid; else hi=mid;
+    t =
+      t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+
+    return (
+      (t ^ t >>> 14) >>> 0
+    ) / 4294967296;
+  };
+}
+
+function randomNormal(rand) {
+  const u =
+    Math.max(rand(), 1e-12);
+
+  const v = rand();
+
+  return Math.sqrt(-2 * Math.log(u)) *
+    Math.cos(2 * Math.PI * v);
+}
+
+function makePhospheneSprite(
+  sigma,
+  aspectRatio,
+  orientation,
+  edgeSharpness
+) {
+  const sigmaMajor =
+    sigma * Math.sqrt(aspectRatio);
+
+  const sigmaMinor =
+    sigma / Math.sqrt(aspectRatio);
+
+  const radius =
+    Math.max(2, Math.ceil(3 * sigmaMajor));
+
+  const size =
+    2 * radius + 1;
+
+  const canvas =
+    document.createElement('canvas');
+
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx =
+    canvas.getContext('2d');
+
+  const image =
+    ctx.createImageData(size, size);
+
+  const cosine =
+    Math.cos(orientation);
+
+  const sine =
+    Math.sin(orientation);
+
+  const majorVariance =
+    sigmaMajor * sigmaMajor;
+
+  const minorVariance =
+    sigmaMinor * sigmaMinor;
+
+  const profileExponent =
+    clamp(edgeSharpness, 1, 10);
+
+  const samplesPerAxis = 3;
+  const sampleCount =
+    samplesPerAxis * samplesPerAxis;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - radius;
+      const dy = y - radius;
+      let alphaSum = 0;
+
+      for (
+        let sampleY = 0;
+        sampleY < samplesPerAxis;
+        sampleY++
+      ) {
+        for (
+          let sampleX = 0;
+          sampleX < samplesPerAxis;
+          sampleX++
+        ) {
+          const subpixelX =
+            dx +
+            (sampleX + 0.5) / samplesPerAxis -
+            0.5;
+
+          const subpixelY =
+            dy +
+            (sampleY + 0.5) / samplesPerAxis -
+            0.5;
+
+          const major =
+            subpixelX * cosine +
+            subpixelY * sine;
+
+          const minor =
+            -subpixelX * sine +
+            subpixelY * cosine;
+
+          const ellipticalDistance =
+            (major * major) / majorVariance +
+            (minor * minor) / minorVariance;
+
+          alphaSum += Math.exp(
+            -Math.LN2 *
+            Math.pow(
+              ellipticalDistance / (2 * Math.LN2),
+              profileExponent
+            )
+          );
+        }
       }
-      eccentricity=(lo+hi)/2;
-    }else{
-      eccentricity=maxEccentricity*Math.sqrt(areaFraction);
-    }
-    const visualRadius=eccentricity/maxEccentricity;
-    const theta=i*goldenAngle;
-    const uniformPitchDeg=Math.sqrt(Math.PI*maxEccentricity*maxEccentricity/n);
-    const localPitchDeg=spacingIsCortical ? corticalPitchMm*(eccentricity+e2)/corticalM0 : uniformPitchDeg;
-    const jitterSd=localPitchDeg*pixelsPerDegree*jitterFraction;
-    let x=(W-1)/2+apertureRadius*visualRadius*Math.cos(theta)+randomNormal(rand)*jitterSd;
-    let y=(H-1)/2+apertureRadius*visualRadius*Math.sin(theta)+randomNormal(rand)*jitterSd;
-    x=clamp(x,0,W-1); y=clamp(y,0,H-1);
-    const working=rand()>=dropout;
-    if(working) workingCount++;
-    const gain=clamp(Math.exp(.22*randomNormal(rand)),.55,1.55);
-    const thresholdOffset=.035*randomNormal(rand);
-    const currentThresholdUa=clamp(referenceCurrentUa*Math.exp(.18*randomNormal(rand)),5,DEFAULTS.maximumStimulationCurrentUa-1);
-    const spriteIndex=Math.min(11,Math.floor(visualRadius*12));
-    // Mild elongation, with more nearly round phosphenes remaining common.
-    const aspectRatio=1+(maximumAspect-1)*Math.pow(rand(),1.7);
-    const aspectIndex=Math.round((aspectRatio-1)/Math.max(maximumAspect-1,1e-6)*(aspectBins-1));
-    const orientationIndex=Math.floor(rand()*orientationBins)%orientationBins;
 
-    // Central phosphenes tend to be better defined, while peripheral ones are
-    // often cloudier. Random variation prevents an unrealistically rigid gradient.
-    const eccentricityMix=Math.pow(visualRadius,.8);
-    const expectedSharpness=centralSharpness*(1-eccentricityMix)+peripheralSharpness*eccentricityMix;
-    const edgeSharpness=clamp(expectedSharpness+DEFAULTS.edgeSharpnessVariation*randomNormal(rand),minimumSharpness,maximumSharpness);
-    const sharpnessIndex=Math.round((edgeSharpness-minimumSharpness)/(maximumSharpness-minimumSharpness)*(sharpnessBins-1));
-    const shapeIndex=(aspectIndex*orientationBins+orientationIndex)*sharpnessBins+sharpnessIndex;
-    const band=sprites[spriteIndex];
-    if(!band.cache.has(shapeIndex)){
-      band.cache.set(shapeIndex,makePhospheneSprite(band.sigmaPx,
-        1+(maximumAspect-1)*aspectIndex/(aspectBins-1),
-        Math.PI*orientationIndex/orientationBins,
-        minimumSharpness+(maximumSharpness-minimumSharpness)*sharpnessIndex/(sharpnessBins-1)));
+      const alpha =
+        Math.round(
+          255 * alphaSum / sampleCount
+        );
+
+      const j =
+        4 * (y * size + x);
+
+      image.data[j] = 255;
+      image.data[j + 1] = 255;
+      image.data[j + 2] = 255;
+      image.data[j + 3] = alpha;
     }
-    // Reuse stable gain variation without changing the seeded electrode layout.
-    const binaryBrightness=clamp(DEFAULTS.binaryMeanBrightness+DEFAULTS.binaryBrightnessVariation*Math.log(gain)/.22,.45,1);
-    electrodes.push({x,y,working,gain,binaryBrightness,thresholdOffset,currentThresholdUa,sprite:band.cache.get(shapeIndex),amplitude:0,adaptation:0});
   }
-  document.getElementById('workingValue').textContent=workingCount;
+
+  ctx.putImageData(image, 0, 0);
+
+  return {
+    canvas,
+    radius
+  };
+}
+
+function buildElectrodes() {
+  const n =
+    clamp(
+      Math.round(
+        Number(controls.electrodeCount.value) || 1
+      ),
+      1,
+      10000
+    );
+
+  controls.electrodeCount.value = n;
+  controls.electrodeSlider.value = n;
+
+  const fov =
+    Number(controls.fov.value);
+
+  const maxEccentricity =
+    fov / 2;
+
+  const pixelsPerDegree =
+    W / CAMERA_HORIZONTAL_FOV_DEG;
+
+  const apertureRadius =
+    W * fov /
+    (2 * CAMERA_HORIZONTAL_FOV_DEG);
+
+  const spacingIsCortical =
+    controls.spacingModel.value === 'cortical';
+
+  const sizeScale =
+    Number(controls.spotSize.value);
+
+  const jitterFraction =
+    Number(controls.jitter.value) / 100;
+
+  const dropout =
+    Number(controls.dropout.value) / 100;
+
+  const rand =
+    mulberry32(19);
+
+  const aspectBins = 4;
+  const orientationBins = 8;
+  const sharpnessBins = 16;
+
+  const maximumAspect =
+    Math.max(
+      1,
+      DEFAULTS.maxPhospheneAspectRatio
+    );
+
+  const centralSharpness =
+    Number(controls.centralSharpness.value);
+
+  const peripheralSharpness =
+    Number(controls.peripheralSharpness.value);
+
+  const minimumSharpness =
+    Math.max(
+      1,
+      Math.min(
+        centralSharpness,
+        peripheralSharpness
+      ) -
+      3 * DEFAULTS.edgeSharpnessVariation
+    );
+
+  const maximumSharpness =
+    Math.min(
+      10,
+      Math.max(
+        minimumSharpness + 0.1,
+        Math.max(
+          centralSharpness,
+          peripheralSharpness
+        ) +
+        3 * DEFAULTS.edgeSharpnessVariation
+      )
+    );
+
+  const e2 = 0.75;
+  const corticalM0 = 17.3;
+  const referenceCurrentUa =
+    DEFAULTS.referenceCurrentUa;
+
+  const currentSpreadUaPerMm2 = 675;
+
+  const corticalActivationRadiusMm =
+    Math.sqrt(
+      referenceCurrentUa /
+      currentSpreadUaPerMm2
+    );
+
+  const corticalAreaPrimitive =
+    eccentricity =>
+      Math.log(
+        (eccentricity + e2) / e2
+      ) +
+      e2 / (eccentricity + e2) -
+      1;
+
+  const totalCorticalArea =
+    2 *
+    Math.PI *
+    corticalM0 *
+    corticalM0 *
+    corticalAreaPrimitive(maxEccentricity);
+
+  const corticalPitchMm =
+    Math.sqrt(totalCorticalArea / n);
+
+  const sprites = [];
+
+  for (let band = 0; band < 12; band++) {
+    const representativeEccentricity =
+      maxEccentricity *
+      (band + 0.5) /
+      12;
+
+    const localMagnification =
+      corticalM0 /
+      (representativeEccentricity + e2);
+
+    const sigmaDeg =
+      corticalActivationRadiusMm /
+      localMagnification;
+
+    const sigmaPx =
+      Math.max(
+        0.55,
+        sizeScale *
+        sigmaDeg *
+        pixelsPerDegree
+      ) *
+      OUTPUT_SCALE;
+
+    sprites.push({
+      sigmaPx,
+      cache: new Map()
+    });
+  }
+
+  electrodes = [];
+  let workingCount = 0;
+
+  const goldenAngle =
+    Math.PI * (3 - Math.sqrt(5));
+
+  for (let i = 0; i < n; i++) {
+    const areaFraction =
+      (i + 0.5) / n;
+
+    let eccentricity;
+
+    if (spacingIsCortical) {
+      const target =
+        corticalAreaPrimitive(maxEccentricity) *
+        areaFraction;
+
+      let lo = 0;
+      let hi = maxEccentricity;
+
+      for (
+        let iteration = 0;
+        iteration < 22;
+        iteration++
+      ) {
+        const mid =
+          (lo + hi) / 2;
+
+        if (
+          corticalAreaPrimitive(mid) <
+          target
+        ) {
+          lo = mid;
+        } else {
+          hi = mid;
+        }
+      }
+
+      eccentricity =
+        (lo + hi) / 2;
+    } else {
+      eccentricity =
+        maxEccentricity *
+        Math.sqrt(areaFraction);
+    }
+
+    const visualRadius =
+      eccentricity /
+      maxEccentricity;
+
+    const theta =
+      i * goldenAngle;
+
+    const uniformPitchDeg =
+      Math.sqrt(
+        Math.PI *
+        maxEccentricity *
+        maxEccentricity /
+        n
+      );
+
+    const localPitchDeg =
+      spacingIsCortical
+        ? corticalPitchMm *
+          (eccentricity + e2) /
+          corticalM0
+        : uniformPitchDeg;
+
+    const jitterSd =
+      localPitchDeg *
+      pixelsPerDegree *
+      jitterFraction;
+
+    let x =
+      (W - 1) / 2 +
+      apertureRadius *
+      visualRadius *
+      Math.cos(theta) +
+      randomNormal(rand) *
+      jitterSd;
+
+    let y =
+      (H - 1) / 2 +
+      apertureRadius *
+      visualRadius *
+      Math.sin(theta) +
+      randomNormal(rand) *
+      jitterSd;
+
+    x = clamp(x, 0, W - 1);
+    y = clamp(y, 0, H - 1);
+
+    const working =
+      rand() >= dropout;
+
+    if (working) {
+      workingCount++;
+    }
+
+    const gain =
+      clamp(
+        Math.exp(
+          0.22 * randomNormal(rand)
+        ),
+        0.55,
+        1.55
+      );
+
+    const thresholdOffset =
+      0.035 * randomNormal(rand);
+
+    const currentThresholdUa =
+      clamp(
+        referenceCurrentUa *
+        Math.exp(
+          0.18 * randomNormal(rand)
+        ),
+        5,
+        DEFAULTS.maximumStimulationCurrentUa - 1
+      );
+
+    const spriteIndex =
+      Math.min(
+        11,
+        Math.floor(visualRadius * 12)
+      );
+
+    const aspectRatio =
+      1 +
+      (maximumAspect - 1) *
+      Math.pow(rand(), 1.7);
+
+    const aspectIndex =
+      Math.round(
+        (aspectRatio - 1) /
+        Math.max(
+          maximumAspect - 1,
+          1e-6
+        ) *
+        (aspectBins - 1)
+      );
+
+    const orientationIndex =
+      Math.floor(
+        rand() * orientationBins
+      ) % orientationBins;
+
+    const eccentricityMix =
+      Math.pow(visualRadius, 0.8);
+
+    const expectedSharpness =
+      centralSharpness *
+      (1 - eccentricityMix) +
+      peripheralSharpness *
+      eccentricityMix;
+
+    const edgeSharpness =
+      clamp(
+        expectedSharpness +
+        DEFAULTS.edgeSharpnessVariation *
+        randomNormal(rand),
+        minimumSharpness,
+        maximumSharpness
+      );
+
+    const sharpnessIndex =
+      Math.round(
+        (edgeSharpness - minimumSharpness) /
+        (maximumSharpness - minimumSharpness) *
+        (sharpnessBins - 1)
+      );
+
+    const shapeIndex =
+      (
+        aspectIndex *
+        orientationBins +
+        orientationIndex
+      ) *
+      sharpnessBins +
+      sharpnessIndex;
+
+    const band =
+      sprites[spriteIndex];
+
+    if (!band.cache.has(shapeIndex)) {
+      band.cache.set(
+        shapeIndex,
+        makePhospheneSprite(
+          band.sigmaPx,
+          1 +
+          (maximumAspect - 1) *
+          aspectIndex /
+          (aspectBins - 1),
+          Math.PI *
+          orientationIndex /
+          orientationBins,
+          minimumSharpness +
+          (
+            maximumSharpness -
+            minimumSharpness
+          ) *
+          sharpnessIndex /
+          (sharpnessBins - 1)
+        )
+      );
+    }
+
+    const binaryBrightness =
+      clamp(
+        DEFAULTS.binaryMeanBrightness +
+        DEFAULTS.binaryBrightnessVariation *
+        Math.log(gain) /
+        0.22,
+        0.45,
+        1
+      );
+
+    electrodes.push({
+      x,
+      y,
+      working,
+      gain,
+      binaryBrightness,
+      thresholdOffset,
+      currentThresholdUa,
+      sprite: band.cache.get(shapeIndex),
+      amplitude: 0,
+      adaptation: 0
+    });
+  }
+
+  document.getElementById(
+    'workingValue'
+  ).textContent = workingCount;
+
   updateLabels();
 }
 
-function updateLabels(){
-  document.getElementById('centralSharpnessOut').value=Number(controls.centralSharpness.value).toFixed(1);
-  document.getElementById('peripheralSharpnessOut').value=Number(controls.peripheralSharpness.value).toFixed(1);
-  document.getElementById('fovOut').value=`${controls.fov.value}°`;
-  document.getElementById('spotSizeOut').value=Number(controls.spotSize.value).toFixed(2);
-  document.getElementById('dropoutOut').value=`${controls.dropout.value}%`;
-  document.getElementById('jitterOut').value=`${controls.jitter.value}%`;
-  document.getElementById('thresholdOut').value=Number(controls.threshold.value).toFixed(2);
-  document.getElementById('edgeMixOut').value=Number(controls.edgeMix.value).toFixed(2);
-  document.getElementById('adaptTauOut').value=`${Number(controls.adaptTau.value).toFixed(2)} s`;
-  document.getElementById('recoveryTauOut').value=`${Number(controls.recoveryTau.value).toFixed(1)} s`;
-  document.getElementById('maxAttenuationOut').value=`${Math.round(100*Number(controls.maxAttenuation.value))}%`;
+function updateLabels() {
+  document.getElementById(
+    'centralSharpnessOut'
+  ).value =
+    Number(
+      controls.centralSharpness.value
+    ).toFixed(1);
+
+  document.getElementById(
+    'peripheralSharpnessOut'
+  ).value =
+    Number(
+      controls.peripheralSharpness.value
+    ).toFixed(1);
+
+  document.getElementById(
+    'fovOut'
+  ).value =
+    `${controls.fov.value}°`;
+
+  document.getElementById(
+    'spotSizeOut'
+  ).value =
+    Number(
+      controls.spotSize.value
+    ).toFixed(2);
+
+  document.getElementById(
+    'dropoutOut'
+  ).value =
+    `${controls.dropout.value}%`;
+
+  document.getElementById(
+    'jitterOut'
+  ).value =
+    `${controls.jitter.value}%`;
+
+  document.getElementById(
+    'thresholdOut'
+  ).value =
+    Number(
+      controls.threshold.value
+    ).toFixed(2);
+
+  document.getElementById(
+    'edgeMixOut'
+  ).value =
+    Number(
+      controls.edgeMix.value
+    ).toFixed(2);
+
+  document.getElementById(
+    'adaptTauOut'
+  ).value =
+    `${Number(
+      controls.adaptTau.value
+    ).toFixed(2)} s`;
+
+  document.getElementById(
+    'recoveryTauOut'
+  ).value =
+    `${Number(
+      controls.recoveryTau.value
+    ).toFixed(1)} s`;
+
+  document.getElementById(
+    'maxAttenuationOut'
+  ).value =
+    `${Math.round(
+      100 *
+      Number(
+        controls.maxAttenuation.value
+      )
+    )}%`;
 }
 
-function arrayToCanvas(array,image,ctx){
-  const data=image.data;
-  for(let i=0;i<array.length;i++){
-    const value=array[i],j=4*i;
-    data[j]=value; data[j+1]=value; data[j+2]=value; data[j+3]=255;
+function arrayToCanvas(array, image, ctx) {
+  const data = image.data;
+
+  for (let i = 0; i < array.length; i++) {
+    const value = array[i];
+    const j = 4 * i;
+
+    data[j] = value;
+    data[j + 1] = value;
+    data[j + 2] = value;
+    data[j + 3] = 255;
   }
-  ctx.putImageData(image,0,0);
+
+  ctx.putImageData(image, 0, 0);
 }
 
-function updateProcessingUI(){
-  document.getElementById('mixRow').style.display=controls.processingMode.value==='hybrid'?'':'none';
+function updateProcessingUI() {
+  document.getElementById(
+    'mixRow'
+  ).style.display =
+    controls.processingMode.value === 'hybrid'
+      ? ''
+      : 'none';
 }
 
-function drawDebugViews(){
-  cameraDebugCtx.drawImage(processing,0,0,W,H);
-  arrayToCanvas(edges,edgeImage,edgeDebugCtx);
-  arrayToCanvas(encoded,encodedImage,encodedDebugCtx);
+function drawDebugViews() {
+  cameraDebugCtx.drawImage(
+    processing,
+    0,
+    0,
+    W,
+    H
+  );
 
-  sampleDebugCtx.fillStyle='#000'; sampleDebugCtx.fillRect(0,0,W,H);
-  const dense=electrodes.length>2000;
-  for(const electrode of electrodes){
-    if(dense){
-      if(!electrode.working) sampleDebugCtx.fillStyle='rgba(255,75,75,.72)';
-      else if(electrode.amplitude>.01){
-        const value=Math.round(80+175*clamp(electrode.amplitude,0,1));
-        sampleDebugCtx.fillStyle=`rgb(${value},${value},${value})`;
-      }else sampleDebugCtx.fillStyle='rgba(130,145,158,.55)';
-      sampleDebugCtx.fillRect(Math.round(electrode.x)-1,Math.round(electrode.y)-1,2,2);
+  arrayToCanvas(
+    edges,
+    edgeImage,
+    edgeDebugCtx
+  );
+
+  arrayToCanvas(
+    encoded,
+    encodedImage,
+    encodedDebugCtx
+  );
+
+  sampleDebugCtx.fillStyle = '#000';
+
+  sampleDebugCtx.fillRect(
+    0,
+    0,
+    W,
+    H
+  );
+
+  const dense =
+    electrodes.length > 2000;
+
+  for (const electrode of electrodes) {
+    if (dense) {
+      if (!electrode.working) {
+        sampleDebugCtx.fillStyle =
+          'rgba(255,75,75,.72)';
+      } else if (
+        electrode.amplitude > 0.01
+      ) {
+        const value =
+          Math.round(
+            80 +
+            175 *
+            clamp(
+              electrode.amplitude,
+              0,
+              1
+            )
+          );
+
+        sampleDebugCtx.fillStyle =
+          `rgb(${value},${value},${value})`;
+      } else {
+        sampleDebugCtx.fillStyle =
+          'rgba(130,145,158,.55)';
+      }
+
+      sampleDebugCtx.fillRect(
+        Math.round(electrode.x) - 1,
+        Math.round(electrode.y) - 1,
+        2,
+        2
+      );
+
       continue;
     }
+
     sampleDebugCtx.beginPath();
-    sampleDebugCtx.arc(electrode.x,electrode.y,2.1,0,2*Math.PI);
-    if(!electrode.working){
-      sampleDebugCtx.fillStyle='rgba(255,75,75,.72)';
+
+    sampleDebugCtx.arc(
+      electrode.x,
+      electrode.y,
+      2.1,
+      0,
+      2 * Math.PI
+    );
+
+    if (!electrode.working) {
+      sampleDebugCtx.fillStyle =
+        'rgba(255,75,75,.72)';
+
       sampleDebugCtx.fill();
-    }else if(electrode.amplitude>.01){
-      const value=Math.round(80+175*clamp(electrode.amplitude,0,1));
-      sampleDebugCtx.fillStyle=`rgb(${value},${value},${value})`;
+    } else if (
+      electrode.amplitude > 0.01
+    ) {
+      const value =
+        Math.round(
+          80 +
+          175 *
+          clamp(
+            electrode.amplitude,
+            0,
+            1
+          )
+        );
+
+      sampleDebugCtx.fillStyle =
+        `rgb(${value},${value},${value})`;
+
       sampleDebugCtx.fill();
-    }else{
-      sampleDebugCtx.strokeStyle='rgba(150,165,178,.75)';
-      sampleDebugCtx.lineWidth=1;
+    } else {
+      sampleDebugCtx.strokeStyle =
+        'rgba(150,165,178,.75)';
+
+      sampleDebugCtx.lineWidth = 1;
       sampleDebugCtx.stroke();
     }
   }
 }
 
-function drawVideoCover(ctx,source,destinationWidth,destinationHeight){
-  const sourceWidth=source.videoWidth||destinationWidth;
-  const sourceHeight=source.videoHeight||destinationHeight;
-  const sourceAspect=sourceWidth/sourceHeight;
-  const destinationAspect=destinationWidth/destinationHeight;
-  let sourceX=0,sourceY=0,cropWidth=sourceWidth,cropHeight=sourceHeight;
-  if(sourceAspect>destinationAspect){
-    cropWidth=sourceHeight*destinationAspect;
-    sourceX=(sourceWidth-cropWidth)/2;
-  }else if(sourceAspect<destinationAspect){
-    cropHeight=sourceWidth/destinationAspect;
-    sourceY=(sourceHeight-cropHeight)/2;
+function drawVideoCover(
+  ctx,
+  source,
+  destinationWidth,
+  destinationHeight
+) {
+  const sourceWidth =
+    source.videoWidth ||
+    destinationWidth;
+
+  const sourceHeight =
+    source.videoHeight ||
+    destinationHeight;
+
+  const sourceAspect =
+    sourceWidth / sourceHeight;
+
+  const destinationAspect =
+    destinationWidth /
+    destinationHeight;
+
+  let sourceX = 0;
+  let sourceY = 0;
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceHeight;
+
+  if (sourceAspect > destinationAspect) {
+    cropWidth =
+      sourceHeight *
+      destinationAspect;
+
+    sourceX =
+      (sourceWidth - cropWidth) / 2;
+  } else if (
+    sourceAspect < destinationAspect
+  ) {
+    cropHeight =
+      sourceWidth /
+      destinationAspect;
+
+    sourceY =
+      (sourceHeight - cropHeight) / 2;
   }
-  ctx.drawImage(source,sourceX,sourceY,cropWidth,cropHeight,0,0,destinationWidth,destinationHeight);
+
+  ctx.drawImage(
+    source,
+    sourceX,
+    sourceY,
+    cropWidth,
+    cropHeight,
+    0,
+    0,
+    destinationWidth,
+    destinationHeight
+  );
 }
 
-function processFrame(now){
-  const elapsed=now-lastProcessed;
-  if(elapsed<1000/TARGET_FPS) return;
-  lastProcessed=now;
-  const instantaneous=1000/Math.max(elapsed,1);
-  fps=fps===0 ? instantaneous : .9*fps+.1*instantaneous;
+function processFrame(now) {
+  const elapsed =
+    now - lastProcessed;
+
+  if (
+    elapsed <
+    1000 / TARGET_FPS
+  ) {
+    return;
+  }
+
+  lastProcessed = now;
+
+  const instantaneous =
+    1000 / Math.max(elapsed, 1);
+
+  fps =
+    fps === 0
+      ? instantaneous
+      : 0.9 * fps +
+        0.1 * instantaneous;
 
   pctx.save();
-  if(controls.mirror.checked){ pctx.translate(W,0); pctx.scale(-1,1); }
-  drawVideoCover(pctx,video,W,H);
-  pctx.restore();
-  const pixels=pctx.getImageData(0,0,W,H).data;
 
-  for(let i=0;i<gray.length;i++){
-    const j=4*i;
-    gray[i]=Math.round(.2126*pixels[j]+.7152*pixels[j+1]+.0722*pixels[j+2]);
+  if (controls.mirror.checked) {
+    pctx.translate(W, 0);
+    pctx.scale(-1, 1);
+  }
+
+  drawVideoCover(
+    pctx,
+    video,
+    W,
+    H
+  );
+
+  pctx.restore();
+
+  const pixels =
+    pctx.getImageData(
+      0,
+      0,
+      W,
+      H
+    ).data;
+
+  for (let i = 0; i < gray.length; i++) {
+    const j = 4 * i;
+
+    gray[i] =
+      Math.round(
+        0.2126 * pixels[j] +
+        0.7152 * pixels[j + 1] +
+        0.0722 * pixels[j + 2]
+      );
   }
 
   edges.fill(0);
-  for(let y=1;y<H-1;y++){
-    let i=y*W+1;
-    for(let x=1;x<W-1;x++,i++){
-      const gx=-gray[i-W-1]+gray[i-W+1]-2*gray[i-1]+2*gray[i+1]-gray[i+W-1]+gray[i+W+1];
-      const gy=-gray[i-W-1]-2*gray[i-W]-gray[i-W+1]+gray[i+W-1]+2*gray[i+W]+gray[i+W+1];
-      edges[i]=Math.min(255,.32*(Math.abs(gx)+Math.abs(gy)));
+
+  for (let y = 1; y < H - 1; y++) {
+    let i = y * W + 1;
+
+    for (
+      let x = 1;
+      x < W - 1;
+      x++, i++
+    ) {
+      const gx =
+        -gray[i - W - 1] +
+        gray[i - W + 1] -
+        2 * gray[i - 1] +
+        2 * gray[i + 1] -
+        gray[i + W - 1] +
+        gray[i + W + 1];
+
+      const gy =
+        -gray[i - W - 1] -
+        2 * gray[i - W] -
+        gray[i - W + 1] +
+        gray[i + W - 1] +
+        2 * gray[i + W] +
+        gray[i + W + 1];
+
+      edges[i] =
+        Math.min(
+          255,
+          0.32 *
+          (
+            Math.abs(gx) +
+            Math.abs(gy)
+          )
+        );
     }
   }
 
-  const mode=controls.processingMode.value;
-  const edgeMix=Number(controls.edgeMix.value);
-  if(mode==='luminance') encoded.set(gray);
-  else if(mode==='edge') encoded.set(edges);
-  else{
-    for(let i=0;i<encoded.length;i++) encoded[i]=(1-edgeMix)*gray[i]+edgeMix*edges[i];
+  const mode =
+    controls.processingMode.value;
+
+  const edgeMix =
+    Number(controls.edgeMix.value);
+
+  if (mode === 'luminance') {
+    encoded.set(gray);
+  } else if (mode === 'edge') {
+    encoded.set(edges);
+  } else {
+    for (let i = 0; i < encoded.length; i++) {
+      encoded[i] =
+        (1 - edgeMix) * gray[i] +
+        edgeMix * edges[i];
+    }
   }
 
-  outctx.fillStyle='#000'; outctx.fillRect(0,0,percept.width,percept.height);
-  outctx.globalCompositeOperation='lighter';
-  const baseThreshold=Number(controls.threshold.value);
-  const binaryStimulation=controls.stimulationMode.value==='binary';
-  const useAdaptation=controls.adaptationEnabled.checked;
-  const adaptationTau=Math.max(.05,Number(controls.adaptTau.value));
-  const recoveryTau=Math.max(.05,Number(controls.recoveryTau.value));
-  const maximumAttenuation=clamp(Number(controls.maxAttenuation.value),0,.95);
-  const maximumCurrentUa=Math.max(DEFAULTS.maximumStimulationCurrentUa,DEFAULTS.referenceCurrentUa+1);
-  const halfSaturationUa=Math.max(.1,DEFAULTS.brightnessHalfSaturationUa);
-  const hillExponent=Math.max(.1,DEFAULTS.brightnessHillExponent);
-  const halfSaturationPower=Math.pow(halfSaturationUa,hillExponent);
-  const dtSeconds=Math.min(elapsed/1000,.25);
-  const adaptationStep=1-Math.exp(-dtSeconds/adaptationTau);
-  const recoveryFactor=Math.exp(-dtSeconds/recoveryTau);
-  for(const electrode of electrodes){
-    if(!electrode.working){ electrode.amplitude=0; electrode.adaptation=0; continue; }
-    const x=Math.round(electrode.x),y=Math.round(electrode.y);
-    const input=encoded[y*W+x]/255;
-    // A single explicit encoder threshold for both coding modes. Variability
-    // in physiological current thresholds remains in the graded response.
-    const threshold=clamp(baseThreshold,0,1);
-    const encoderDrive=clamp((input-threshold)/Math.max(1-threshold,1e-6),0,1);
-    let rawAmplitude=0;
-    if(encoderDrive>0 && binaryStimulation){
-      rawAmplitude=electrode.binaryBrightness;
-    }else if(encoderDrive>0){
-      const currentThresholdUa=Math.min(electrode.currentThresholdUa,maximumCurrentUa-1e-3);
-      const requestedCurrentUa=currentThresholdUa+encoderDrive*(maximumCurrentUa-currentThresholdUa);
-      const currentAboveThresholdUa=Math.max(0,requestedCurrentUa-currentThresholdUa);
-      const currentPower=Math.pow(currentAboveThresholdUa,hillExponent);
-      const maximumCurrentPower=Math.pow(maximumCurrentUa-currentThresholdUa,hillExponent);
-      const brightness=currentPower/(currentPower+halfSaturationPower);
-      const maximumBrightness=maximumCurrentPower/(maximumCurrentPower+halfSaturationPower);
-      rawAmplitude=brightness/Math.max(maximumBrightness,1e-6)*electrode.gain;
+  outctx.fillStyle = '#000';
+
+  outctx.fillRect(
+    0,
+    0,
+    percept.width,
+    percept.height
+  );
+
+  outctx.globalCompositeOperation =
+    'lighter';
+
+  const baseThreshold =
+    Number(controls.threshold.value);
+
+  const binaryStimulation =
+    controls.stimulationMode.value ===
+    'binary';
+
+  const useAdaptation =
+    controls.adaptationEnabled.checked;
+
+  const adaptationTau =
+    Math.max(
+      0.05,
+      Number(controls.adaptTau.value)
+    );
+
+  const recoveryTau =
+    Math.max(
+      0.05,
+      Number(controls.recoveryTau.value)
+    );
+
+  const maximumAttenuation =
+    clamp(
+      Number(
+        controls.maxAttenuation.value
+      ),
+      0,
+      0.95
+    );
+
+  const maximumCurrentUa =
+    Math.max(
+      DEFAULTS.maximumStimulationCurrentUa,
+      DEFAULTS.referenceCurrentUa + 1
+    );
+
+  const halfSaturationUa =
+    Math.max(
+      0.1,
+      DEFAULTS.brightnessHalfSaturationUa
+    );
+
+  const hillExponent =
+    Math.max(
+      0.1,
+      DEFAULTS.brightnessHillExponent
+    );
+
+  const halfSaturationPower =
+    Math.pow(
+      halfSaturationUa,
+      hillExponent
+    );
+
+  const dtSeconds =
+    Math.min(
+      elapsed / 1000,
+      0.25
+    );
+
+  const adaptationStep =
+    1 -
+    Math.exp(
+      -dtSeconds /
+      adaptationTau
+    );
+
+  const recoveryFactor =
+    Math.exp(
+      -dtSeconds /
+      recoveryTau
+    );
+
+  for (const electrode of electrodes) {
+    if (!electrode.working) {
+      electrode.amplitude = 0;
+      electrode.adaptation = 0;
+      continue;
     }
-    let amplitude=rawAmplitude;
-    if(useAdaptation){
-      amplitude*=1-maximumAttenuation*electrode.adaptation;
-      if(rawAmplitude>=.012) electrode.adaptation+=(1-electrode.adaptation)*adaptationStep;
-      else electrode.adaptation*=recoveryFactor;
-    }else{
-      electrode.adaptation=0;
+
+    const x =
+      Math.round(electrode.x);
+
+    const y =
+      Math.round(electrode.y);
+
+    const input =
+      encoded[y * W + x] / 255;
+
+    const threshold =
+      clamp(
+        baseThreshold,
+        0,
+        1
+      );
+
+    const encoderDrive =
+      clamp(
+        (input - threshold) /
+        Math.max(
+          1 - threshold,
+          1e-6
+        ),
+        0,
+        1
+      );
+
+    let rawAmplitude = 0;
+
+    if (
+      encoderDrive > 0 &&
+      binaryStimulation
+    ) {
+      rawAmplitude =
+        electrode.binaryBrightness;
+    } else if (
+      encoderDrive > 0
+    ) {
+      const currentThresholdUa =
+        Math.min(
+          electrode.currentThresholdUa,
+          maximumCurrentUa - 1e-3
+        );
+
+      const requestedCurrentUa =
+        currentThresholdUa +
+        encoderDrive *
+        (
+          maximumCurrentUa -
+          currentThresholdUa
+        );
+
+      const currentAboveThresholdUa =
+        Math.max(
+          0,
+          requestedCurrentUa -
+          currentThresholdUa
+        );
+
+      const currentPower =
+        Math.pow(
+          currentAboveThresholdUa,
+          hillExponent
+        );
+
+      const maximumCurrentPower =
+        Math.pow(
+          maximumCurrentUa -
+          currentThresholdUa,
+          hillExponent
+        );
+
+      const brightness =
+        currentPower /
+        (
+          currentPower +
+          halfSaturationPower
+        );
+
+      const maximumBrightness =
+        maximumCurrentPower /
+        (
+          maximumCurrentPower +
+          halfSaturationPower
+        );
+
+      rawAmplitude =
+        brightness /
+        Math.max(
+          maximumBrightness,
+          1e-6
+        ) *
+        electrode.gain;
     }
-    electrode.amplitude=amplitude;
-    if(amplitude<.012) continue;
-    outctx.globalAlpha=Math.min(1,amplitude);
-    const sprite=electrode.sprite;
-    outctx.drawImage(sprite.canvas,electrode.x*OUTPUT_SCALE-sprite.radius,electrode.y*OUTPUT_SCALE-sprite.radius);
+
+    let amplitude =
+      rawAmplitude;
+
+    if (useAdaptation) {
+      amplitude *=
+        1 -
+        maximumAttenuation *
+        electrode.adaptation;
+
+      if (rawAmplitude >= 0.012) {
+        electrode.adaptation +=
+          (
+            1 -
+            electrode.adaptation
+          ) *
+          adaptationStep;
+      } else {
+        electrode.adaptation *=
+          recoveryFactor;
+      }
+    } else {
+      electrode.adaptation = 0;
+    }
+
+    electrode.amplitude =
+      amplitude;
+
+    if (amplitude < 0.012) {
+      continue;
+    }
+
+    outctx.globalAlpha =
+      Math.min(
+        1,
+        amplitude
+      );
+
+    const sprite =
+      electrode.sprite;
+
+    outctx.drawImage(
+      sprite.canvas,
+      electrode.x * OUTPUT_SCALE -
+        sprite.radius,
+      electrode.y * OUTPUT_SCALE -
+        sprite.radius
+    );
   }
-  outctx.globalAlpha=1;
-  outctx.globalCompositeOperation='source-over';
+
+  outctx.globalAlpha = 1;
+  outctx.globalCompositeOperation =
+    'source-over';
 
   frameCounter++;
-  if(controls.showDebug.checked && frameCounter%3===0) drawDebugViews();
-  if(frameCounter%6===0){
-    document.getElementById('fpsValue').textContent=fps.toFixed(1);
+
+  if (
+    controls.showDebug.checked &&
+    frameCounter % 3 === 0
+  ) {
+    drawDebugViews();
+  }
+
+  if (frameCounter % 6 === 0) {
+    document.getElementById(
+      'fpsValue'
+    ).textContent =
+      fps.toFixed(1);
   }
 }
 
-function loop(now){
-  if(!running) return;
+function loop(now) {
+  if (!running) {
+    return;
+  }
+
   processFrame(now);
   requestAnimationFrame(loop);
 }
 
-async function startCamera(){
-  if(running || cameraStarting) return;
-  cameraStarting=true;
-  const cameraButton=document.getElementById('cameraToggle');
-  cameraButton.disabled=true;
-  cameraButton.textContent='Starting camera…';
-  statusEl.textContent='Requesting camera access…';
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},aspectRatio:{ideal:4/3},frameRate:{ideal:30}},audio:false});
-    video.srcObject=stream;
+async function startCamera() {
+  if (
+    running ||
+    cameraStarting
+  ) {
+    return;
+  }
+
+  cameraStarting = true;
+
+  const cameraButton =
+    document.getElementById(
+      'cameraToggle'
+    );
+
+  cameraButton.disabled = true;
+  cameraButton.textContent =
+    'Starting camera…';
+
+  statusEl.textContent =
+    'Requesting camera access…';
+
+  try {
+    stream =
+      await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: {ideal: 640},
+          height: {ideal: 480},
+          aspectRatio: {ideal: 4 / 3},
+          frameRate: {ideal: 30}
+        },
+        audio: false
+      });
+
+    video.srcObject =
+      stream;
+
     await video.play();
-    running=true; lastProcessed=performance.now(); frameCounter=0; fps=0;
-    electrodes.forEach(electrode=>electrode.adaptation=0);
-    cameraButton.textContent='Stop camera';
-    cameraButton.disabled=false;
-    statusEl.textContent='Camera active.';
+
+    running = true;
+    lastProcessed =
+      performance.now();
+
+    frameCounter = 0;
+    fps = 0;
+
+    electrodes.forEach(
+      electrode =>
+        electrode.adaptation = 0
+    );
+
+    cameraButton.textContent =
+      'Stop camera';
+
+    cameraButton.disabled =
+      false;
+
+    statusEl.textContent =
+      'Camera active.';
+
     requestAnimationFrame(loop);
-  }catch(error){
-    cameraButton.textContent='Start camera';
-    cameraButton.disabled=false;
-    statusEl.textContent=`Camera could not start automatically: ${error.message}. Click Start camera to retry.`;
-  }finally{
-    cameraStarting=false;
+  } catch (error) {
+    cameraButton.textContent =
+      'Start camera';
+
+    cameraButton.disabled =
+      false;
+
+    statusEl.textContent =
+      `Camera could not start automatically: ${error.message}. Click Start camera to retry.`;
+  } finally {
+    cameraStarting = false;
   }
 }
 
-function stopCamera(){
-  running=false;
-  if(stream) stream.getTracks().forEach(track=>track.stop());
-  stream=null; video.srcObject=null;
-  const cameraButton=document.getElementById('cameraToggle');
-  cameraButton.textContent='Start camera';
-  cameraButton.disabled=false;
-  statusEl.textContent='Stopped.';
+function stopCamera() {
+  running = false;
+
+  if (stream) {
+    stream.getTracks().forEach(
+      track => track.stop()
+    );
+  }
+
+  stream = null;
+  video.srcObject = null;
+
+  const cameraButton =
+    document.getElementById(
+      'cameraToggle'
+    );
+
+  cameraButton.textContent =
+    'Start camera';
+
+  cameraButton.disabled =
+    false;
+
+  statusEl.textContent =
+    'Stopped.';
 }
 
-function toggleCamera(){
-  if(running) stopCamera();
-  else startCamera();
+function toggleCamera() {
+  if (running) {
+    stopCamera();
+  } else {
+    startCamera();
+  }
 }
 
-['fov','spacingModel','spotSize','dropout','jitter'].forEach(name=>{
-  controls[name].addEventListener('input',buildElectrodes);
-  controls[name].addEventListener('change',buildElectrodes);
+[
+  'fov',
+  'spacingModel',
+  'spotSize',
+  'dropout',
+  'jitter'
+].forEach(name => {
+  controls[name].addEventListener(
+    'input',
+    buildElectrodes
+  );
+
+  controls[name].addEventListener(
+    'change',
+    buildElectrodes
+  );
 });
-controls.electrodeSlider.addEventListener('input',()=>{ controls.electrodeCount.value=controls.electrodeSlider.value; buildElectrodes(); });
-controls.electrodeCount.addEventListener('input',()=>{
-  const value=clamp(Math.round(Number(controls.electrodeCount.value)||1),1,10000);
-  controls.electrodeSlider.value=value;
-  buildElectrodes();
-});
-controls.processingMode.addEventListener('change',updateProcessingUI);
-// Commit expensive sprite rebuilds on release; labels track the drag immediately.
-['centralSharpness','peripheralSharpness'].forEach(name=>{
-  controls[name].addEventListener('input',updateLabels);
-  controls[name].addEventListener('change',()=>{
-    const previous=electrodes;
+
+controls.electrodeSlider.addEventListener(
+  'input',
+  () => {
+    controls.electrodeCount.value =
+      controls.electrodeSlider.value;
+
     buildElectrodes();
-    electrodes.forEach((electrode,i)=>{
-      electrode.adaptation=previous[i].adaptation;
-      electrode.amplitude=previous[i].amplitude;
-    });
-  });
+  }
+);
+
+controls.electrodeCount.addEventListener(
+  'input',
+  () => {
+    const value =
+      clamp(
+        Math.round(
+          Number(
+            controls.electrodeCount.value
+          ) || 1
+        ),
+        1,
+        10000
+      );
+
+    controls.electrodeSlider.value =
+      value;
+
+    buildElectrodes();
+  }
+);
+
+controls.processingMode.addEventListener(
+  'change',
+  updateProcessingUI
+);
+
+[
+  'centralSharpness',
+  'peripheralSharpness'
+].forEach(name => {
+  controls[name].addEventListener(
+    'input',
+    updateLabels
+  );
+
+  controls[name].addEventListener(
+    'change',
+    () => {
+      const previous =
+        electrodes;
+
+      buildElectrodes();
+
+      electrodes.forEach(
+        (electrode, i) => {
+          if (previous[i]) {
+            electrode.adaptation =
+              previous[i].adaptation;
+
+            electrode.amplitude =
+              previous[i].amplitude;
+          }
+        }
+      );
+    }
+  );
 });
-['threshold','edgeMix','adaptTau','recoveryTau','maxAttenuation'].forEach(name=>controls[name].addEventListener('input',updateLabels));
-controls.adaptationEnabled.addEventListener('change',()=>{
-  if(!controls.adaptationEnabled.checked) electrodes.forEach(electrode=>electrode.adaptation=0);
+
+[
+  'threshold',
+  'edgeMix',
+  'adaptTau',
+  'recoveryTau',
+  'maxAttenuation'
+].forEach(name => {
+  controls[name].addEventListener(
+    'input',
+    updateLabels
+  );
 });
-controls.showDebug.addEventListener('change',()=>{ document.getElementById('debugPanel').style.display=controls.showDebug.checked?'block':'none'; });
-document.getElementById('smaller').addEventListener('click',()=>{ controls.fov.value=Math.max(6,Number(controls.fov.value)-5); buildElectrodes(); });
-document.getElementById('bigger').addEventListener('click',()=>{ controls.fov.value=Math.min(50,Number(controls.fov.value)+5); buildElectrodes(); });
-document.getElementById('cameraToggle').addEventListener('click',toggleCamera);
-window.addEventListener('beforeunload',stopCamera);
+
+controls.adaptationEnabled.addEventListener(
+  'change',
+  () => {
+    if (
+      !controls.adaptationEnabled.checked
+    ) {
+      electrodes.forEach(
+        electrode =>
+          electrode.adaptation = 0
+      );
+    }
+  }
+);
+
+controls.showDebug.addEventListener(
+  'change',
+  () => {
+    document.getElementById(
+      'debugPanel'
+    ).style.display =
+      controls.showDebug.checked
+        ? 'block'
+        : 'none';
+  }
+);
+
+document.getElementById(
+  'smaller'
+).addEventListener(
+  'click',
+  () => {
+    controls.fov.value =
+      Math.max(
+        6,
+        Number(controls.fov.value) - 5
+      );
+
+    buildElectrodes();
+  }
+);
+
+document.getElementById(
+  'bigger'
+).addEventListener(
+  'click',
+  () => {
+    controls.fov.value =
+      Math.min(
+        50,
+        Number(controls.fov.value) + 5
+      );
+
+    buildElectrodes();
+  }
+);
+
+document.getElementById(
+  'cameraToggle'
+).addEventListener(
+  'click',
+  toggleCamera
+);
+
+window.addEventListener(
+  'beforeunload',
+  stopCamera
+);
 
 buildElectrodes();
 updateProcessingUI();
-outctx.fillStyle='#000'; outctx.fillRect(0,0,percept.width,percept.height);
+
+outctx.fillStyle = '#000';
+
+outctx.fillRect(
+  0,
+  0,
+  percept.width,
+  percept.height
+);
+
 drawDebugViews();
-if(DEFAULTS.autoStartCamera) startCamera();
+
+if (DEFAULTS.autoStartCamera) {
+  startCamera();
+}
 </script>
 </body>
 </html>
