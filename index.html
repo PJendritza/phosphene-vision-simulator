@@ -461,16 +461,16 @@
   <h1>Cortical phosphene vision simulator</h1>
 
   <div class="sub">
-    Interactive simulation of camera-based visual encoding for a hypothetical penetrating-electrode array in human primary visual cortex (V1).
+    Interactive simulation of camera-based visual encoding for a hypothetical array of stimulation sites in human primary visual cortex (V1).
   </div>
 
   <div class="guideRow">
     <div class="modelGuide">
       <strong>What is being simulated:</strong>
-      electrodes sample a camera-derived activation map. Above a manual threshold, Graded coding maps intensity to requested current and a saturating brightness response; Binary coding switches on a fixed, electrode-specific brightness. Electrode density follows a V1 cortical-magnification approximation, and phosphene size is estimated from electrical current spread. Stable, mildly elliptical spots have adjustable central and peripheral edge sharpness.
+      stimulation sites sample a camera-derived activation map. Above a manual threshold, Graded coding maps intensity to requested current and a saturating brightness response; Binary coding switches on a fixed, site-specific brightness. Stimulation site density follows a V1 cortical-magnification approximation, and phosphene size is estimated from electrical current spread. The display uses general stimulation-site terminology; its current size and brightness models are based on electrical microstimulation and are not calibrated for optogenetic stimulation. Stable, mildly elliptical spots have adjustable central and peripheral edge sharpness.
 
       <strong>Processing models:</strong>
-      Sobel emphasizes local luminance boundaries; Luminance represents image intensity; Luminance + Sobel mixes both. Sobel has fixed gain, without automatic normalization. A smaller field of view restricts the electrode array to the central camera region without zooming the image. This is a research visualization, not a patient-specific prediction.
+      Sobel emphasizes local luminance boundaries; Luminance represents image intensity; Luminance + Sobel mixes both. Sobel has fixed gain, without automatic normalization. A smaller field of view restricts the stimulation site array to the central camera region without zooming the image. This is a research visualization, not a patient-specific prediction.
     </div>
 
     <div class="qrCard">
@@ -497,7 +497,7 @@
       <div class="row">
         <label>Field of view</label>
         <span class="tip" tabindex="0"
-          data-tip="Diameter of the camera-centred visual field represented by the simulated electrode array. This is not gaze contingent because eye tracking is not modeled.">i</span>
+          data-tip="Diameter of the camera-centred visual field represented by the simulated stimulation site array. This is not gaze contingent because eye tracking is not modeled.">i</span>
 
         <div class="fovButtons" style="flex:1">
           <button id="smaller" class="secondary">−</button>
@@ -509,9 +509,9 @@
       </div>
 
       <div class="row">
-        <label for="electrodeSlider">Electrodes</label>
+        <label for="electrodeSlider">Stimulation sites</label>
         <span class="tip" tabindex="0"
-          data-tip="Number of available stimulation sites distributed across the modeled visual field. Dropout is applied afterward, so the number of working electrodes may be lower.">i</span>
+          data-tip="Number of available stimulation sites distributed across the modeled visual field. Dropout is applied afterward, so the number of working stimulation sites may be lower.">i</span>
 
         <div class="pairedInput">
           <input id="electrodeSlider" type="range" min="1" max="10000" step="1" value="2048">
@@ -532,9 +532,9 @@
       </div>
 
       <div class="row">
-        <label for="spacingModel">Electrode spacing</label>
+        <label for="spacingModel">Stimulation site spacing</label>
         <span class="tip" tabindex="0"
-          data-tip="Human V1 magnification allocates more electrodes to central vision according to M(E)=17.3/(E+0.75). Uniform visual angle is a comparison condition with equal visual-field density.">i</span>
+          data-tip="Human V1 magnification allocates more stimulation sites to central vision according to M(E)=17.3/(E+0.75). Uniform visual angle is a comparison condition with equal visual-field density.">i</span>
 
         <select id="spacingModel">
           <option value="cortical">Human V1 magnification</option>
@@ -545,16 +545,16 @@
       <div class="row">
         <label for="spotSize">Phosphene size</label>
         <span class="tip" tabindex="0"
-          data-tip="Multiplier on a current-spread-derived penetrating-electrode phosphene. Scale 1 corresponds to a 60 µA reference with K=675 µA/mm²; size also increases with eccentricity through inverse cortical magnification.">i</span>
+          data-tip="Multiplier on a phosphene estimated from intracortical electrical microstimulation. Scale 1 corresponds to a 60 µA reference with K=675 µA/mm²; size also increases with eccentricity through inverse cortical magnification.">i</span>
 
         <input id="spotSize" type="range" min="0.25" max="3.0" step="0.05" value="1.5">
         <output id="spotSizeOut"></output>
       </div>
 
       <div class="row">
-        <label for="dropout">Electrode dropout</label>
+        <label for="dropout">Stimulation site dropout</label>
         <span class="tip" tabindex="0"
-          data-tip="Fixed percentage of electrodes that do not generate a phosphene, approximating unavailable, ineffective, or subthreshold stimulation sites.">i</span>
+          data-tip="Fixed percentage of stimulation sites that do not generate a phosphene, approximating unavailable, ineffective, or subthreshold stimulation sites.">i</span>
 
         <input id="dropout" type="range" min="0" max="60" step="1" value="10">
         <output id="dropoutOut"></output>
@@ -563,7 +563,7 @@
       <div class="row">
         <label for="jitter">Position irregularity</label>
         <span class="tip" tabindex="0"
-          data-tip="Fixed positional displacement expressed as a percentage of the local electrode pitch. It prevents an unrealistically perfect phosphene lattice.">i</span>
+          data-tip="Fixed positional displacement expressed as a percentage of the local stimulation site pitch. It prevents an unrealistically perfect phosphene lattice.">i</span>
 
         <input id="jitter" type="range" min="0" max="80" step="1" value="25">
         <output id="jitterOut"></output>
@@ -572,7 +572,7 @@
       <div class="row">
         <label for="threshold">Activation threshold</label>
         <span class="tip" tabindex="0"
-          data-tip="Manual shared encoder gate (0–1). At or below this value electrodes are off. Above it, Binary gives a fixed electrode-specific brightness; Graded maps the remaining intensity range to current and a saturating brightness response. No automatic threshold or normalization is applied.">i</span>
+          data-tip="Manual shared encoder gate (0–1). At or below this value stimulation sites are off. Above it, Binary gives a fixed site-specific brightness; Graded maps the remaining intensity range to current and a saturating brightness response. No automatic threshold or normalization is applied.">i</span>
 
         <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.10">
         <output id="thresholdOut"></output>
@@ -590,7 +590,7 @@
       <div class="row">
         <label for="adaptationEnabled">Phosphene adaptation</label>
         <span class="tip" tabindex="0"
-          data-tip="Optional phenomenological attenuation during sustained electrode activation. Phosphene onset remains immediate and recovery occurs while the electrode is inactive.">i</span>
+          data-tip="Optional phenomenological attenuation during sustained stimulation site activation. Phosphene onset remains immediate and recovery occurs while the stimulation site is inactive.">i</span>
 
         <input id="adaptationEnabled" type="checkbox">
       </div>
@@ -633,7 +633,7 @@
       <div class="row">
         <label for="showDebug">Update debug views</label>
         <span class="tip" tabindex="0"
-          data-tip="Displays the camera, Sobel map, selected encoder output, and electrode samples. Disabling these panels can improve frame rate.">i</span>
+          data-tip="Displays the camera, Sobel map, selected encoder output, and stimulation site samples. Disabling these panels can improve frame rate.">i</span>
 
         <input id="showDebug" type="checkbox" checked>
       </div>
@@ -641,7 +641,7 @@
       <div class="row">
         <label for="stimulationMode">Stimulation coding</label>
         <span class="tip" tabindex="0"
-          data-tip="Graded: encoder strength above threshold drives a saturating current–brightness model. Binary: input strictly above the same threshold switches on a fixed electrode-specific brightness, with optional adaptation. Binary is an encoding strategy, not a claim that perception is exclusively on/off.">i</span>
+          data-tip="Graded: encoder strength above threshold drives a saturating current–brightness model. Binary: input strictly above the same threshold switches on a fixed site-specific brightness, with optional adaptation. Binary is an encoding strategy, not a claim that perception is exclusively on/off.">i</span>
 
         <select id="stimulationMode">
           <option value="graded">Graded brightness</option>
@@ -661,7 +661,7 @@
       <div class="row">
         <label for="peripheralSharpness">Peripheral sharpness</label>
         <span class="tip" tabindex="0"
-          data-tip="Same profile exponent at the edge of the modeled field. Interpolated from the central setting, with stable small electrode-specific variation. This is a phenomenological appearance control, not a patient-calibrated measurement. Applied when you release the slider.">i</span>
+          data-tip="Same profile exponent at the edge of the modeled field. Interpolated from the central setting, with stable small site-specific variation. This is a phenomenological appearance control, not a patient-calibrated measurement. Applied when you release the slider.">i</span>
 
         <input id="peripheralSharpness" type="range" min="1" max="10" step="0.1" value="2">
         <output id="peripheralSharpnessOut"></output>
@@ -674,7 +674,7 @@
         </div>
 
         <div class="metric">
-          <span>Working electrodes</span>
+          <span>Working stimulation sites</span>
           <strong id="workingValue">0</strong>
         </div>
       </div>
@@ -698,13 +698,13 @@
         </figure>
 
         <figure>
-          <figcaption>4. Electrode samples</figcaption>
+          <figcaption>4. Stimulation site samples</figcaption>
           <canvas class="debugCanvas" id="sampleDebug" width="320" height="240"></canvas>
         </figure>
       </div>
 
       <div class="note">
-        Electrode view: white = active, gray outline = available but currently inactive, red = dropped electrode.
+        Stimulation site view: white = active, gray outline = available but currently inactive, red = unavailable stimulation site.
       </div>
     </section>
   </div>
@@ -713,7 +713,7 @@
     <summary>Model and limitations</summary>
 
     <p>
-      The model uses mildly elliptical generalized-Gaussian profiles, with no separate halo, and additive blending capped by display brightness. Sharpness is an adjustable phenomenological parameter: the central-to-peripheral gradient is not calibrated to a patient. Sharpness preserves the peak and half-maximum contour, but changes integrated light. Size uses a fixed reference-current spread approximation, not dynamically varying spread with requested current. A minimum displayed size of 0.55 processing pixels (Gaussian-equivalent scale) keeps tiny spots visible; this is a rendering compromise, not a physiological minimum. Camera horizontal field of view is assumed to be 70°, not measured. The simulator omits patient-specific retinotopy, cortical folding, gaze tracking, nonlinear electrode interactions, stimulation safety, and pulse-train timing. Adaptation and the graded current–brightness response are simplified models; binary coding is a comparison strategy.
+      The model uses mildly elliptical generalized-Gaussian profiles, with no separate halo, and additive blending capped by display brightness. Sharpness is an adjustable phenomenological parameter: the central-to-peripheral gradient is not calibrated to a patient. Sharpness preserves the peak and half-maximum contour, but changes integrated light. Size uses a fixed reference-current spread approximation, not dynamically varying spread with requested current. A minimum displayed size of 0.55 processing pixels (Gaussian-equivalent scale) keeps tiny spots visible; this is a rendering compromise, not a physiological minimum. Camera horizontal field of view is assumed to be 70°, not measured. The simulator omits patient-specific retinotopy, cortical folding, gaze tracking, nonlinear stimulation site interactions, stimulation safety, and pulse-train timing. Adaptation and the graded current–brightness response are simplified models; binary coding is a comparison strategy.
     </p>
 
     <p>
